@@ -2385,7 +2385,17 @@ async function abrirApostilaWeb(si, ai){
   if(!token){ toast('Sessão expirada — entre de novo em Ajustes → Sincronização.'); return; }
   const cfg = syncEffectiveProjectConfig();
   const bucket = CURRICULO.apostilaStorageBucket || 'apostilas';
-  const signUrl = cfg.url.replace(/\/$/,'') + '/storage/v1/object/sign/' + bucket + '/' + rel.split('/').map(encodeURIComponent).join('/');
+  // O upload em massa via Supabase CLI (supabase storage cp) sempre aninha o
+  // conteúdo dentro de uma pasta "Apostilas/" no bucket (reflete o nome da
+  // pasta de origem no PC) — por isso o prefixo aqui, só na versão web.
+  // As pastas de matéria no bucket também não têm acento/cedilha (o Supabase
+  // Storage rejeitava upload em massa de algumas pastas acentuadas) — então
+  // só o primeiro pedaço do caminho (nome da matéria) é "limpo" aqui; o nome
+  // exibido na tela continua normal, com acento.
+  const relParts = rel.split('/');
+  relParts[0] = relParts[0].normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-zA-Z0-9 \-]/g,'');
+  const storageKey = 'Apostilas/' + relParts.join('/');
+  const signUrl = cfg.url.replace(/\/$/,'') + '/storage/v1/object/sign/' + bucket + '/' + storageKey.split('/').map(encodeURIComponent).join('/');
   try{
     const res = await fetch(signUrl, {
       method:'POST',
