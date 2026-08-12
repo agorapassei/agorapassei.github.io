@@ -4617,14 +4617,12 @@ function buildRankingHtml(){
   }).join('');
 }
 function buildProgressoMateriasHtml(){
-  /* Todas as materias, em ordem alfabetica. Fora do ciclo entra atenuada em vez
-     de sumir: o app precisa distinguir "fora do ciclo" de "zerada". */
-  const rows = subjectsOrdenadas().map(({s,si})=>{
+  // So matérias ativas — as fora do ciclo somem daqui (e do total abaixo) até serem reativadas.
+  const rows = subjectsOrdenadas().filter(({si})=>isSubjectActive(si)).map(({s,si})=>{
     const subjTotalPages = totalTheoryForSubject(si);
     const subjReadPages = pagesReadForSubject(si);
     const p = subjTotalPages? Math.round(subjReadPages/subjTotalPages*100):0;
-    const fora = !isSubjectActive(si);
-    return `<div class="dist-row${fora?' fora':''}" data-si="${si}"><div class="nm">${escapeHtml(s.name)}${fora?' <span class="mat-fora">fora</span>':''}</div><div class="bar"><i style="width:${p}%"></i></div><div class="pct">${p}%</div></div>`;
+    return `<div class="dist-row" data-si="${si}"><div class="nm">${escapeHtml(s.name)}</div><div class="bar"><i style="width:${p}%"></i></div><div class="pct">${p}%</div></div>`;
   }).join('');
   const totalPages = totalTheoryAll();
   const readPages = pagesReadAll();
@@ -4836,15 +4834,15 @@ function reguaDominioHtml(pct){
     </svg></div>`;
 }
 
-/* A FILA: uma linha por apostila com pendencia, ordenada por atraso. Fora do
-   ciclo desce para o fim e fica em grupo proprio - "fora do ciclo" e "zerada"
-   sao estados diferentes e nunca se parecem. */
+/* A FILA: uma linha por apostila com pendencia, ordenada por atraso. Materia
+   fora do ciclo nao entra aqui - so aparece de novo se for reativada. */
 function filaHojeHtml(){
   const hoje = todayStr();
   const dias = iso => Math.round((Date.parse(hoje+'T00:00:00Z') - Date.parse(iso+'T00:00:00Z'))/864e5);
   const itens = [];
   SUBJECTS.forEach((s,si)=>{
-    const fora = !isSubjectActive(si);
+    if(!isSubjectActive(si)) return;
+    const fora = false;
     s.aulas.forEach((a,ai)=>{
       const rec = state.aulas[key(si,ai)];
       if(!rec || rec.mastered) return;
@@ -5244,11 +5242,10 @@ function renderMateriasGrid(filter){
   const cards = document.createElement('div');
   cards.className = 'mat-grid';
   let n = 0;
-  /* TODAS as materias aparecem, em ordem alfabetica. Antes a grade escondia
-     quem estava fora do ciclo, e o usuario simplesmente nao encontrava a
-     materia - "fora do ciclo" e um estado, nao um motivo para desaparecer.
-     Quem esta fora ganha marca propria (.fora) em vez de sumir. */
-  subjectsOrdenadas().forEach(({s,si})=>{
+  // So matérias ativas aparecem aqui — uma matéria desmarcada em Ciclo → Replanejar
+  // some da grade (e de tudo mais) até ser reativada; os dados dela continuam
+  // guardados, só saem das contas na tela.
+  subjectsOrdenadas().filter(({si})=>isSubjectActive(si)).forEach(({s,si})=>{
     if(filter){
       const bate = s.name.toLowerCase().includes(filter) || s.aulas.some(a=>a.toLowerCase().includes(filter));
       if(!bate) return;
@@ -5257,10 +5254,10 @@ function renderMateriasGrid(filter){
     const r = resumoMateria(si);
     const card = document.createElement('button');
     card.type = 'button';
-    card.className = 'mat-card' + (isSubjectActive(si) ? '' : ' fora');
+    card.className = 'mat-card';
     card.style.setProperty('--mat-cor', subjectColor(si));
     card.innerHTML = `
-      <div class="mat-card-nm">${escapeHtml(s.name)}${isSubjectActive(si)?'':'<span class="mat-fora">fora do ciclo</span>'}</div>
+      <div class="mat-card-nm">${escapeHtml(s.name)}</div>
       <div class="mat-card-kpis">
         <div><b>${r.estudados}</b><span>Tópicos<br>Estudados</span></div>
         <div><b>${r.totais}</b><span>Tópicos<br>Totais</span></div>
