@@ -2197,21 +2197,6 @@
   </div>
 </div>
 
-<!-- VISUALIZADOR DE APOSTILA (versão web) — abre o PDF dentro do próprio app, num
-     iframe, em vez de baixar/abrir noutra aba. Usado só quando CURRICULO.apostilasViaSupabase. -->
-<div class="quiz-overlay" id="apostilaViewerOverlay">
-  <div class="quiz-modal" style="height:92vh; max-height:92vh; width:min(96vw, 900px); padding:0;">
-    <div class="quiz-header">
-      <button class="quiz-close" id="apostilaViewerClose"><svg class=ic-svg aria-hidden=true><use href=#ic-close></use></svg></button>
-      <div class="quiz-progress" id="apostilaViewerTitulo">Apostila</div>
-      <a class="quiz-title" id="apostilaViewerAbrirAba" href="#" target="_blank" rel="noopener" title="Abrir em nova aba"><svg class=ic-svg aria-hidden=true><use href=#ic-external-link></use></svg></a>
-    </div>
-    <div style="flex:1; min-height:0; background:var(--bg);" id="apostilaViewerBody">
-      <iframe id="apostilaViewerFrame" style="width:100%; height:100%; border:0; display:block;" title="Apostila PDF"></iframe>
-    </div>
-  </div>
-</div>
-
 <div class="quiz-overlay" id="settingsOverlay">
   <div class="quiz-modal" style="height:auto; max-height:88vh;">
     <div class="quiz-header">
@@ -2421,44 +2406,11 @@ async function abrirApostilaWeb(si, ai){
     if(!res.ok) throw new Error('HTTP '+res.status);
     const body = await res.json();
     if(!body.signedURL) throw new Error('resposta sem signedURL');
-    const url = cfg.url.replace(/\/$/,'') + '/storage/v1' + body.signedURL;
-    await abrirApostilaViewer(url, (APOSTILA_FILES[si] && APOSTILA_FILES[si][ai]) || 'Apostila');
+    window.open(cfg.url.replace(/\/$/,'') + '/storage/v1' + body.signedURL, '_blank', 'noopener');
   }catch(e){
     toast('Não foi possível abrir a apostila: ' + e.message);
   }
 }
-// Visualizador embutido — abre o PDF num iframe dentro do próprio app, em vez de
-// baixar ou abrir noutra aba do navegador (o link "abrir em nova aba" continua
-// disponível pra quem preferir). O Supabase Storage bloqueia carregar o PDF
-// direto num iframe de outro domínio (X-Frame-Options) — por isso o PDF é
-// baixado primeiro via fetch() e reaberto como blob: URL (mesma origem da
-// página), que não sofre esse bloqueio.
-let apostilaViewerBlobUrl = null;
-async function abrirApostilaViewer(url, titulo){
-  document.getElementById('apostilaViewerTitulo').textContent = titulo || 'Apostila';
-  document.getElementById('apostilaViewerAbrirAba').href = url;
-  document.getElementById('apostilaViewerOverlay').classList.add('show');
-  document.getElementById('apostilaViewerFrame').src = 'about:blank';
-  document.getElementById('apostilaViewerBody').classList.add('is-loading');
-  try{
-    const res = await fetch(url);
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const blob = await res.blob();
-    if(apostilaViewerBlobUrl) URL.revokeObjectURL(apostilaViewerBlobUrl);
-    apostilaViewerBlobUrl = URL.createObjectURL(blob);
-    document.getElementById('apostilaViewerFrame').src = apostilaViewerBlobUrl;
-  }catch(e){
-    toast('Não foi possível carregar o PDF: ' + e.message);
-  }finally{
-    document.getElementById('apostilaViewerBody').classList.remove('is-loading');
-  }
-}
-function fecharApostilaViewer(){
-  document.getElementById('apostilaViewerOverlay').classList.remove('show');
-  document.getElementById('apostilaViewerFrame').src = 'about:blank'; // para de renderizar em segundo plano
-  if(apostilaViewerBlobUrl){ URL.revokeObjectURL(apostilaViewerBlobUrl); apostilaViewerBlobUrl = null; }
-}
-document.getElementById('apostilaViewerClose').addEventListener('click', fecharApostilaViewer);
 
 /* ===================== ESTADO ===================== */
 function defaultState(){
