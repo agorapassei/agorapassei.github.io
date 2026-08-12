@@ -1814,6 +1814,23 @@
     </div>
   </section>
 
+  <!-- QUESTÕES: praticar por matéria, por apostila (aula) ou todas juntas -->
+  <section class="view" id="view-questoes">
+    <div id="questoesResumo"></div>
+    <div class="card" style="margin-bottom:16px;">
+      <h2>Praticar</h2>
+      <div class="settings-sub" style="margin-top:0;">Responda questões de todas as matérias ativas de uma vez, ou escolha abaixo uma matéria específica ou uma apostila (aula) específica.</div>
+      <div class="data-btns">
+        <button class="btn block" id="btnQuestoesTodas">▶ Responder todas as questões</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="prv-filtros" id="questoesModoFiltro"></div>
+      <input class="search" type="search" id="questoesBusca" placeholder="Buscar matéria ou apostila...">
+      <div id="questoesLista"></div>
+    </div>
+  </section>
+
   <!-- REFAZER ERRADAS -->
   <section class="view" id="view-refazer">
     <div class="refazer-hero">
@@ -2094,6 +2111,7 @@
   <div class="drawer-items">
   <button data-view="painel" class="active"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 11.2 12 4l8.5 7.2"/><path d="M5.5 9.8V19a1 1 0 0 0 1 1H9.5v-5.5h5V20h3a1 1 0 0 0 1-1V9.8"/></svg></span>Painel</button>
   <button data-view="materias"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.2c2.4-.9 5-.9 7.5.3v13c-2.5-1.2-5.1-1.2-7.5-.3z"/><path d="M20 5.2c-2.4-.9-5-.9-7.5.3v13c2.5-1.2 5.1-1.2 7.5-.3z"/></svg></span>Matérias</button>
+  <button data-view="questoes"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="3.5" width="15" height="17" rx="1.6"/><path d="M8 8.5h8M8 12h8M8 15.5h5.5"/></svg></span>Questões</button>
   <button data-view="tempo"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.3"/><path d="M12 7.5V12l3.2 2"/></svg></span>Tempo</button>
   <button data-view="planejamento"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.7" y="5" width="16.6" height="15" rx="2.2"/><path d="M3.7 9.7h16.6"/><path d="M8 3.3v3.6M16 3.3v3.6"/></svg></span>Ciclo</button>
   <button data-view="refazer"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11A8 8 0 1 0 17.7 17"/><path d="M20 5v6h-6"/></svg></span>Refazer</button>
@@ -4159,6 +4177,7 @@ function maybeShowOnboarding(){
 // identidade visual e deixa de ser um cabeçalho idêntico o tempo todo.
 const VIEW_TITLES = {
   materias:     { label:'Matérias', desc:'Suas apostilas, aula por aula, com o progresso de leitura de cada uma.' },
+  questoes:     { label:'Questões', desc:'Pratique por matéria, por apostila ou todas as questões juntas.' },
   tempo:        { label:'Tempo de estudo', desc:'Quanto tempo você já dedicou a teoria e questões, por matéria e no total.' },
   planejamento: { label:'Ciclo de estudos', desc:'A ordem das matérias no seu ciclo e o quanto já avançou nele.' },
   refazer:      { label:'Questões para refazer', desc:'Questões que você errou e ainda não dominou - vale a pena revisar.' },
@@ -5221,6 +5240,146 @@ function resumoMateria(si){
     totalPag, lidas, pagPct: totalPag? Math.round(lidas/totalPag*100) : 0,
   };
 }
+
+/* ===================== ABA QUESTÕES =====================
+   Tela dedicada a praticar questões, independente de Matérias (que é sobre teoria/leitura).
+   Três formas de responder: todas as matérias ativas juntas, uma matéria inteira, ou uma
+   apostila (aula) específica. Só olha matérias ativas (isSubjectActive), igual ao resto do
+   app. */
+let questoesModo = 'materia'; // 'materia' | 'apostila'
+function statsForQuestions(qs){
+  let respondidas=0, dominadas=0;
+  qs.forEach(q=>{
+    const r = state.questions[q.id];
+    if(r && r.attempts){ respondidas++; if(r.dominated) dominadas++; }
+  });
+  return { total: qs.length, respondidas, dominadas, pct: qs.length? Math.round(respondidas/qs.length*100):0 };
+}
+function allActiveQuestions(){
+  const out = [];
+  SUBJECTS.forEach((s,si)=>{
+    if(!isSubjectActive(si)) return;
+    s.aulas.forEach((a,ai)=> out.push(...bankFor(si,ai)));
+  });
+  return out;
+}
+function questoesForSubject(si){
+  const s = SUBJECTS[si];
+  const out = [];
+  s.aulas.forEach((a,ai)=> out.push(...bankFor(si,ai)));
+  return out;
+}
+function renderQuestoes(filterArg){
+  const buscaEl = document.getElementById('questoesBusca');
+  const filter = (filterArg!=null ? filterArg : (buscaEl? buscaEl.value : '')).toLowerCase().trim();
+  const resumo = document.getElementById('questoesResumo');
+  const listaEl = document.getElementById('questoesLista');
+  const filtrosEl = document.getElementById('questoesModoFiltro');
+  if(!resumo || !listaEl || !filtrosEl) return;
+
+  const todas = allActiveQuestions();
+  const st = statsForQuestions(todas);
+  resumo.innerHTML = `<div class="rev-kpis">
+      <div class="rev-kpi"><b>${st.total}</b><small>questões disponíveis</small></div>
+      <div class="rev-kpi${st.respondidas?' ok':''}"><b>${st.respondidas}</b><small>já respondidas</small></div>
+      <div class="rev-kpi"><b>${st.dominadas}</b><small>dominadas</small></div>
+      <div class="rev-kpi"><b>${st.pct}%</b><small>do banco já feito</small></div>
+    </div>`;
+
+  filtrosEl.innerHTML = '';
+  [['materia','Por matéria'],['apostila','Por apostila']].forEach(([k,label])=>{
+    const b = document.createElement('button');
+    b.className = 'rev-repo-filtro'+(questoesModo===k?' on':'');
+    setRotulo(b, label);
+    b.addEventListener('click', ()=>{ questoesModo=k; renderQuestoes(); });
+    filtrosEl.appendChild(b);
+  });
+
+  listaEl.innerHTML = '';
+  const ativos = subjectsOrdenadas().filter(({si})=>isSubjectActive(si));
+
+  if(questoesModo==='materia'){
+    const grid = document.createElement('div');
+    grid.className = 'mat-grid';
+    let n=0;
+    ativos.forEach(({s,si})=>{
+      const qs = questoesForSubject(si);
+      if(!qs.length) return;
+      if(filter && !s.name.toLowerCase().includes(filter)) return;
+      n++;
+      const qst = statsForQuestions(qs);
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'mat-card';
+      card.style.setProperty('--mat-cor', subjectColor(si));
+      card.innerHTML = `
+        <div class="mat-card-nm">${escapeHtml(s.name)}</div>
+        <div class="mat-card-kpis">
+          <div><b>${qst.total}</b><span>Questões</span></div>
+          <div><b>${qst.respondidas}</b><span>Respondidas</span></div>
+          <div><b>${qst.pct}%</b><span>Feito</span></div>
+        </div>`;
+      card.addEventListener('click', ()=> startQuiz(qs, s.name));
+      grid.appendChild(card);
+    });
+    if(n===0){ listaEl.innerHTML = '<div class="empty">Nenhuma matéria com questões encontrada.</div>'; return; }
+    listaEl.appendChild(grid);
+  } else {
+    let n=0;
+    ativos.forEach(({s,si})=>{
+      const aulasComQ = s.aulas.map((a,ai)=>({a,ai,qs:bankFor(si,ai)})).filter(x=>x.qs.length);
+      if(!aulasComQ.length) return;
+      const matchSubj = s.name.toLowerCase().includes(filter);
+      const filteredAulas = aulasComQ.filter(x=> matchSubj || x.a.toLowerCase().includes(filter));
+      if(filter && filteredAulas.length===0) return;
+      n++;
+
+      const block = document.createElement('div');
+      block.className = 'subj-block';
+      block.style.setProperty('--mat-cor', subjectColor(si));
+      if(filter || questoesAbertas.has(si)) block.classList.add('open');
+      const totalQs = aulasComQ.reduce((s2,x)=>s2+x.qs.length,0);
+      const head = document.createElement('div');
+      head.className = 'subj-head';
+      head.innerHTML = `<div class="ttl"><b>${escapeHtml(s.name)}</b><small>${totalQs} questões em ${aulasComQ.length} apostilas</small></div><div class="chev">▶</div>`;
+      head.addEventListener('click', ()=>{
+        block.classList.toggle('open');
+        if(block.classList.contains('open')) questoesAbertas.add(si); else questoesAbertas.delete(si);
+      });
+      block.appendChild(head);
+
+      const body = document.createElement('div');
+      body.className = 'subj-body';
+      (filter? filteredAulas : aulasComQ).forEach(({a,ai,qs})=>{
+        const qst = statsForQuestions(qs);
+        const row = document.createElement('div');
+        row.className = 'aula-row';
+        row.innerHTML = `
+          <div class="aula-top">
+            <div class="aula-txt">
+              <div class="nm">Aula ${escapeHtml(a)}</div>
+              <div class="dt">${qst.respondidas}/${qst.total} respondidas · ${qst.dominadas} dominadas</div>
+            </div>
+          </div>
+          <div class="quiz-row">
+            <button class="btn sm block quiz-btn"><svg class=ic-svg aria-hidden=true><use href=#ic-quiz></use></svg> Responder questões (${qst.total})</button>
+          </div>`;
+        row.querySelector('.quiz-btn').addEventListener('click', ()=> startQuiz(qs, s.name+' · Aula '+a));
+        body.appendChild(row);
+      });
+      block.appendChild(body);
+      listaEl.appendChild(block);
+    });
+    if(n===0){ listaEl.innerHTML = '<div class="empty">Nenhuma apostila com questões encontrada.</div>'; }
+  }
+}
+let questoesAbertas = new Set();
+document.getElementById('btnQuestoesTodas').addEventListener('click', ()=>{
+  const qs = allActiveQuestions();
+  if(!qs.length){ toast('Nenhuma questão disponível.'); return; }
+  startQuiz(qs, 'Todas as questões');
+});
+document.getElementById('questoesBusca').addEventListener('input', e=> renderQuestoes(e.target.value));
 
 function renderMaterias(filter){
   filter = (filter||"").toLowerCase().trim();
@@ -8153,6 +8312,7 @@ function renderAll(skipMaterias){
   renderHeaderStats();
   renderPainel();
   if(!skipMaterias) renderMaterias(document.getElementById('searchBox').value);
+  renderQuestoes();
   renderRefazer();
   renderRevisao();
   renderMetas();
