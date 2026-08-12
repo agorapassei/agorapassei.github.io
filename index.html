@@ -1729,6 +1729,7 @@
 <symbol id="ic-x-circle" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7.3 7.3l5.4 5.4M12.7 7.3l-5.4 5.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
 <symbol id="ic-alert" viewBox="0 0 20 20"><path d="M10 3.2L2.6 16.4h14.8L10 3.2z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M10 7.8v3.6M10 13.6v.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
 <symbol id="ic-book" viewBox="0 0 20 20"><path d="M4 3.5h8.5A2.5 2.5 0 0115 6v10.5H6.5A2.5 2.5 0 014 14V3.5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M4 13.5h11" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+<symbol id="ic-external-link" viewBox="0 0 20 20"><path d="M8.5 4.5H4.8A1.3 1.3 0 003.5 5.8v9.4a1.3 1.3 0 001.3 1.3h9.4a1.3 1.3 0 001.3-1.3v-3.7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.3 10.7L16 4M11.2 4H16v4.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 <symbol id="ic-book-open" viewBox="0 0 20 20"><path d="M10 5.5S8 4 5 4H3v11h2c3 0 5 1.5 5 1.5V5.5zM10 5.5S12 4 15 4h2v11h-2c-3 0-5 1.5-5 1.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
 <symbol id="ic-quiz" viewBox="0 0 20 20"><path d="M4.5 3.5h11v13h-11z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M7.5 7.5h5M7.5 10.5h5M7.5 13.5h3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
 <symbol id="ic-pencil" viewBox="0 0 20 20"><path d="M3.5 16.5l1-3.5L13 4.5l2.5 2.5-8.5 8.5-3.5 1z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
@@ -2196,6 +2197,21 @@
   </div>
 </div>
 
+<!-- VISUALIZADOR DE APOSTILA (versão web) — abre o PDF dentro do próprio app, num
+     iframe, em vez de baixar/abrir noutra aba. Usado só quando CURRICULO.apostilasViaSupabase. -->
+<div class="quiz-overlay" id="apostilaViewerOverlay">
+  <div class="quiz-modal" style="height:92vh; max-height:92vh; width:min(96vw, 900px); padding:0;">
+    <div class="quiz-header">
+      <button class="quiz-close" id="apostilaViewerClose"><svg class=ic-svg aria-hidden=true><use href=#ic-close></use></svg></button>
+      <div class="quiz-progress" id="apostilaViewerTitulo">Apostila</div>
+      <a class="quiz-title" id="apostilaViewerAbrirAba" href="#" target="_blank" rel="noopener" title="Abrir em nova aba"><svg class=ic-svg aria-hidden=true><use href=#ic-external-link></use></svg></a>
+    </div>
+    <div style="flex:1; min-height:0; background:var(--bg);" id="apostilaViewerBody">
+      <iframe id="apostilaViewerFrame" style="width:100%; height:100%; border:0; display:block;" title="Apostila PDF"></iframe>
+    </div>
+  </div>
+</div>
+
 <div class="quiz-overlay" id="settingsOverlay">
   <div class="quiz-modal" style="height:auto; max-height:88vh;">
     <div class="quiz-header">
@@ -2400,16 +2416,31 @@ async function abrirApostilaWeb(si, ai){
     const res = await fetch(signUrl, {
       method:'POST',
       headers:{ apikey:cfg.key, Authorization:'Bearer '+token, 'Content-Type':'application/json' },
-      body: JSON.stringify({ expiresIn: 120 })  // 2min — só o tempo de o navegador abrir a aba
+      body: JSON.stringify({ expiresIn: 1800 })  // 30min — dá tempo de ler dentro do visualizador embutido
     });
     if(!res.ok) throw new Error('HTTP '+res.status);
     const body = await res.json();
     if(!body.signedURL) throw new Error('resposta sem signedURL');
-    window.open(cfg.url.replace(/\/$/,'') + '/storage/v1' + body.signedURL, '_blank', 'noopener');
+    const url = cfg.url.replace(/\/$/,'') + '/storage/v1' + body.signedURL;
+    abrirApostilaViewer(url, (APOSTILA_FILES[si] && APOSTILA_FILES[si][ai]) || 'Apostila');
   }catch(e){
     toast('Não foi possível abrir a apostila: ' + e.message);
   }
 }
+// Visualizador embutido — abre o PDF num iframe dentro do próprio app, em vez de
+// baixar ou abrir noutra aba do navegador (o link "abrir em nova aba" continua
+// disponível pra quem preferir).
+function abrirApostilaViewer(url, titulo){
+  document.getElementById('apostilaViewerFrame').src = url;
+  document.getElementById('apostilaViewerTitulo').textContent = titulo || 'Apostila';
+  document.getElementById('apostilaViewerAbrirAba').href = url;
+  document.getElementById('apostilaViewerOverlay').classList.add('show');
+}
+function fecharApostilaViewer(){
+  document.getElementById('apostilaViewerOverlay').classList.remove('show');
+  document.getElementById('apostilaViewerFrame').src = 'about:blank'; // para de baixar/renderizar em segundo plano
+}
+document.getElementById('apostilaViewerClose').addEventListener('click', fecharApostilaViewer);
 
 /* ===================== ESTADO ===================== */
 function defaultState(){
