@@ -2682,6 +2682,18 @@ function escapeHtml(s){
   if(s==null) return '';
   return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
+// Algumas questões (ex: "a forma verbal destacada") dependem de uma palavra sublinhada/em
+// negrito no PDF original pra indicar QUAL palavra da alternativa está sendo avaliada - sem
+// isso a questão fica ambígua. q.emphasis[i], quando presente, é essa palavra pra alternativa i
+// (extraída da apostila real, ver sublinhados/negrito no PDF). Escapa tudo primeiro, depois
+// grifa só a 1ª ocorrência da palavra inteira (case-insensitive), com segurança de regex.
+function optTextHtml(opt, emphasisWord){
+  const esc = escapeHtml(opt);
+  if(!emphasisWord) return esc;
+  const escWord = escapeHtml(emphasisWord).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  const re = new RegExp('\\b('+escWord+')\\b', 'i');
+  return esc.replace(re, '<u><b>$1</b></u>');
+}
 
 /* ===================== ROTULO COM ICONE =====================
    Injeta um rotulo que PODE conter markup de icone do sprite, sem abrir porta
@@ -7458,7 +7470,7 @@ function renderQuizQuestion(){
       if(i===q.correctIndex) cls += ' correct';
       else if(i===chosenIdx) cls += ' wrong';
     }
-    html += `<button class="${cls}" data-i="${i}" ${showAnswered?'disabled':''}><span class="opt-letter">${q.letters[i]}</span><span class="opt-text">${escapeHtml(opt)}</span></button>`;
+    html += `<button class="${cls}" data-i="${i}" ${showAnswered?'disabled':''}><span class="opt-letter">${q.letters[i]}</span><span class="opt-text">${optTextHtml(opt, q.emphasis && q.emphasis[i])}</span></button>`;
   });
   html += `</div><div id="quizFeedback">`;
   if(showAnswered){
