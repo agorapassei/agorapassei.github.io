@@ -6,9 +6,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Estudos PETROBRAS">
+<meta name="apple-mobile-web-app-title" content="Estudo Certo">
 <meta name="theme-color" content="#9C4E33">
-<title>Estudos PETROBRAS</title>
+<title>Estudo Certo</title>
 <!-- manifest.json e os icon-*.png precisam estar na MESMA pasta que este arquivo .html pra
      funcionar (tanto pra "Adicionar à Tela de Início" no iPad/iPhone quanto pro atalho/instalação
      no Android e no desktop). Se algum dos dois não for encontrado, o app continua funcionando
@@ -1226,6 +1226,10 @@
   .nav-ic.finish{flex:1.6; background:var(--green-light); color:var(--green-dark); font-weight:700; font-size:.8rem;}
   .nav-ic.fav-on{background:color-mix(in srgb, var(--yellow) 30%, var(--card)); border-color:color-mix(in srgb, var(--yellow) 55%, transparent); color:var(--yellow-dark);}
   .quiz-tag{font-size:.7rem; color:var(--text-mut); font-weight:700; margin-bottom:6px; text-transform:uppercase; letter-spacing:.3px;}
+  /* De qual matéria/apostila a questão atual é - visível sempre, não importa como o quiz
+     foi iniciado (por matéria, por apostila ou "todas juntas"), pra nunca ficar perdido
+     no meio de um quiz misturado. */
+  .quiz-origin{display:inline-flex; align-items:center; gap:5px; font-size:.72rem; color:var(--green); font-weight:700; background:color-mix(in srgb, var(--green) 12%, transparent); padding:4px 9px; border-radius:20px; margin-bottom:10px;}
   .quiz-stem{font-size:1rem; font-weight:650; line-height:1.45; margin-bottom:16px; white-space:pre-line;}
   .quiz-options{display:flex; flex-direction:column; gap:9px;}
   .opt{
@@ -1773,7 +1777,7 @@
     <span></span><span></span><span></span>
     <i class="tab-badge" id="menuBadge" hidden></i>
   </button>
-  <h1 id="appTitle"><svg class=ic-svg aria-hidden=true><use href=#ic-book></use></svg> Estudos PETROBRAS</h1>
+  <h1 id="appTitle"><svg class=ic-svg aria-hidden=true><use href=#ic-book></use></svg> Estudo Certo</h1>
   <div class="sub">Acompanhamento de apostilas e questões</div>
   <div class="top-stats">
     <div class="top-stat"><b id="hdrPct">0%</b><span>Páginas lidas</span></div>
@@ -2106,7 +2110,7 @@
 <nav class="drawer" id="sideDrawer" aria-label="Menu principal" aria-hidden="true">
   <div class="drawer-hd">
     <button type="button" class="hamburger in-drawer" id="btnMenuClose" aria-label="Fechar menu"><span></span><span></span><span></span></button>
-    <div class="drawer-ttl">Estudos PETROBRAS</div>
+    <div class="drawer-ttl" id="drawerTtl">Estudo Certo</div>
   </div>
   <div class="drawer-items">
   <button data-view="painel" class="active"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 11.2 12 4l8.5 7.2"/><path d="M5.5 9.8V19a1 1 0 0 0 1 1H9.5v-5.5h5V20h3a1 1 0 0 0 1-1V9.8"/></svg></span>Painel</button>
@@ -2302,7 +2306,7 @@
           <button class="btn ghost sm" id="btnCheckUpdate"><svg class=ic-svg aria-hidden=true><use href=#ic-sync></use></svg> Verificar atualizações</button>
         </div>
       </div>
-      <div class="settings-app-info" id="appFooterInfo"><svg class=ic-svg aria-hidden=true><use href=#ic-book></use></svg> Estudos PETROBRAS · seus dados ficam só neste dispositivo</div>
+      <div class="settings-app-info" id="appFooterInfo"><svg class=ic-svg aria-hidden=true><use href=#ic-book></use></svg> Estudo Certo · seus dados ficam só neste dispositivo</div>
     </div>
   </div>
 </div>
@@ -2343,6 +2347,8 @@
   if(appTitleEl) appTitleEl.innerHTML = window.APP_BRAND_HTML;
   const footerInfo = document.getElementById('appFooterInfo');
   if(footerInfo) footerInfo.innerHTML = '<svg class=ic-svg aria-hidden=true><use href=#ic-book></use></svg> ' + nome + ' · seus dados ficam só neste dispositivo';
+  const drawerTtl = document.getElementById('drawerTtl');
+  if(drawerTtl) drawerTtl.textContent = nome;
 })();
 
 /* ===================== DADOS ===================== */
@@ -2467,6 +2473,26 @@ function qidSubjectMap(){
   }));
   _qidSubjectMapCache = map;
   return map;
+}
+// Mapa qid -> {si, ai}, usado pra mostrar "Matéria · Aula" na tela de questão
+// independente de como o quiz foi iniciado (por matéria, por apostila ou todas juntas) -
+// respostas sempre contam pros índices por state.questions[qid], que não depende de
+// como o quiz foi aberto; isso aqui é só pra exibição.
+let _qidAulaMapCache = null;
+function qidAulaMap(){
+  if(_qidAulaMapCache) return _qidAulaMapCache;
+  const map = {};
+  SUBJECTS.forEach((s,si)=> s.aulas.forEach((a,ai)=>{
+    bankFor(si,ai).forEach(q=>{ map[q.id]={si,ai}; });
+  }));
+  _qidAulaMapCache = map;
+  return map;
+}
+function questionOriginLabel(qid){
+  const loc = qidAulaMap()[qid];
+  if(!loc) return null;
+  const s = SUBJECTS[loc.si];
+  return s.name + ' · Aula ' + s.aulas[loc.ai];
 }
 function getQState(qid){
   if(!state.questions[qid]) state.questions[qid] = { attempts:0, correctCount:0, lastResult:null, dominated:false };
@@ -7448,6 +7474,13 @@ function renderQuizQuestion(){
     <button class="nav-ic" id="quizNextIcBtn" title="Próxima questão">▶</button>
     <button class="nav-ic finish" id="quizFinishBtn" title="Ver resultado"><svg class=ic-svg aria-hidden=true><use href=#ic-flag></use></svg>${mode==='quiz'? ' '+answeredCount+'/'+total : ''}</button>
   </div>`;
+  // Mostra sempre de qual matéria/apostila é a questão atual - essencial quando o quiz
+  // mistura matérias ("Todas as questões"), mas mostrado também nos outros modos por
+  // consistência.
+  const origemLbl = questionOriginLabel(q.id);
+  if(origemLbl){
+    html += `<div class="quiz-origin"><svg class=ic-svg aria-hidden=true><use href=#ic-book></use></svg> ${escapeHtml(origemLbl)}</div>`;
+  }
   if(questaoReportada(q.id)){
     html += `<div class="quiz-reportada"><svg class=ic-svg aria-hidden=true><use href=#ic-alert></use></svg> Você reportou um erro nesta questão. Ela está na lista de correção, em Configurações → Questões reportadas.</div>`;
   }

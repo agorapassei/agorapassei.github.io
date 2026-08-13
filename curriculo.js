@@ -1,4 +1,4 @@
-/* ===================== CURRICULO: Estudos PETROBRAS =====================
+/* ===================== CURRICULO: Estudo Certo =====================
    Dados especificos deste "produto" - materias, paginas, apostilas, tema e
    configuracao padrao de sincronizacao. O motor (index.html/engine) le
    tudo isso de window.CURRICULO e nao tem nada fixo de Petrobras nele.
@@ -6,7 +6,7 @@
 window.CURRICULO = {
   storeKey: "petrobras-study-tracker-v1",
   tema: {
-    nome: "Estudos PETROBRAS",
+    nome: "Estudo Certo",
     corPrimaria: "#046A38",
     corSecundaria: "#FCD116"
   },

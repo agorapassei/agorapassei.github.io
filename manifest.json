@@ -1,7 +1,7 @@
 {
-  "name": "Estudos PETROBRAS",
-  "short_name": "Estudos PETROBRAS",
-  "description": "Acompanhamento de estudos para o concurso PETROBRAS: apostilas, questões, ciclo de estudos e metas.",
+  "name": "Estudo Certo",
+  "short_name": "Estudo Certo",
+  "description": "Estudo Certo: acompanhamento de estudos para concursos — apostilas, questões, ciclo de estudos e metas.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
