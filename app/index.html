@@ -2306,6 +2306,7 @@
       <div class="card" style="box-shadow:none; border:none; padding:0; margin-top:18px;" id="syncCard">
         <h2>Sincronizar entre aparelhos</h2>
         <div class="settings-sub" id="syncStatus">Progresso não sincronizado — este aparelho guarda seu próprio progresso, separado dos outros.</div>
+        <div class="settings-sub" style="margin-top:2px;">Contas são só por convite: o e-mail precisa estar autorizado antes de conseguir criar conta ou entrar.</div>
         <div class="sync-login-row" id="syncLoginRow">
           <input type="email" class="sync-input" id="syncEmail" placeholder="E-mail" autocomplete="off">
           <input type="password" class="sync-input" id="syncPassword" placeholder="Senha" autocomplete="off">
@@ -6934,7 +6935,18 @@ async function syncSignUpClick(){
     await syncRun();
   }catch(e){
     if((e.message||'').toLowerCase().indexOf('url/chave')!==-1){ syncShowAdvanced(true); }
-    toast('Não consegui criar a conta: ' + (e.message||'erro desconhecido'));
+    /* Com a lista de e-mails autorizados ativa no Supabase, uma tentativa de cadastro
+       fora da lista volta como erro de banco (texto varia: "Database error saving new
+       user", "not authorized" etc.) - a mensagem genérica do Supabase confundiria o
+       usuário, então trocamos por uma explicação direta sempre que o erro não for
+       claramente outra coisa (ex: e-mail já em uso). */
+  const msg = (e.message||'').toLowerCase();
+  const jaExiste = msg.indexOf('already registered')!==-1 || msg.indexOf('já')!==-1;
+  if(jaExiste){
+    toast('Esse e-mail já tem conta — clique em "Entrar".');
+  } else {
+    toast('Não consegui criar a conta. Esse e-mail pode não estar autorizado neste app — fale com o administrador.');
+  }
   }
 }
 async function syncDisconnectClick(){
