@@ -1674,11 +1674,20 @@
   /* ===================== CONFIGURAÇÕES (tema, paleta, dados) =====================
      O botao que abre essa tela agora mora na barra inferior (depois de "Metas"),
      nao mais flutuando por cima do cabecalho. */
-  /* Tamanho da interface: reescala o font-size do <html> (não do body), pra tudo que usa
-     rem no app inteiro crescer proporcionalmente — igual ao zoom do navegador, mas persistido
-     nas configurações em vez de depender do zoom do navegador. */
-  html.size-medium{ font-size:115%; }
-  html.size-large{ font-size:130%; }
+  /* Tamanho da interface: usa a propriedade CSS "zoom" (não font-size) porque o app é
+     majoritariamente dimensionado em px, não em rem - reescalar só o font-size do <html>
+     não mudaria quase nada visualmente. "zoom" reescala o layout inteiro pixel a pixel,
+     replicando o mesmo efeito do zoom nativo do navegador (Ctrl +/-), só que persistido
+     nas configurações do app em vez de depender do zoom do navegador do usuário. */
+  html.size-medium{ zoom:1.15; }
+  html.size-large{ zoom:1.3; }
+  .settings-menu-row{
+    display:flex; align-items:center; justify-content:space-between; width:100%;
+    padding:14px 16px; border-radius:14px; border:1.5px solid var(--border); background:var(--bg);
+    cursor:pointer; font-size:.92rem; font-weight:700; color:var(--text); text-align:left;
+  }
+  .settings-menu-row span:first-child{display:flex; align-items:center; gap:8px;}
+  .settings-menu-chev{font-size:1.2rem; color:var(--text-mut);}
   .theme-toggle{display:flex; gap:8px; margin-bottom:16px;}
   .theme-opt{
     flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; padding:14px 8px;
@@ -2266,12 +2275,12 @@
         <div class="settings-sub" id="favoritosStatus">Toque na <svg class=ic-svg aria-hidden=true><use href=#ic-star></use></svg> durante uma questão pra favoritá-la e revisar depois, independente de ter acertado ou errado.</div>
         <button class="btn ghost sm" id="btnRefazerFavoritas"><svg class=ic-svg aria-hidden=true><use href=#ic-star-fill></use></svg> Refazer favoritas</button>
       </div>
-      <div class="card" style="box-shadow:none; border:none; padding:0; margin-bottom:18px;" id="tutoriaisCard">
-        <h2>Ajuda</h2>
-        <div class="settings-sub" style="margin-top:0;">Tutoriais rápidos</div>
-        <div id="tutoriaisList"></div>
-        <div class="settings-sub" style="margin-top:16px;">Manual de funcionalidades — o que cada aba faz</div>
-        <div id="manualList"></div>
+      <div class="card" style="box-shadow:none; border:none; padding:0; margin-bottom:18px;" id="helpMenuCard">
+        <button class="settings-menu-row" id="btnOpenHelp">
+          <span><svg class=ic-svg aria-hidden=true><use href=#ic-book></use></svg> Ajuda</span>
+          <span class="settings-menu-chev">›</span>
+        </button>
+        <div class="settings-sub" style="margin-top:6px;">Tutoriais rápidos e o manual de funcionalidades do app.</div>
       </div>
       <div class="card" style="box-shadow:none; border:none; padding:0;">
         <h2>Dados</h2>
@@ -2286,6 +2295,7 @@
       <div class="card" style="box-shadow:none; border:none; padding:0; margin-top:18px;" id="fsLocalCard">
         <h2>Arquivo local</h2>
         <div class="settings-sub" id="fsLocalStatus">Seu progresso é salvo automaticamente no navegador.</div>
+        <button class="btn ghost sm" id="btnFsLocalCheck" style="margin-top:8px;"><svg class=ic-svg aria-hidden=true><use href=#ic-sync></use></svg> Verificar espelho local (só instalação Windows)</button>
       </div>
       <div class="card" style="box-shadow:none; border:none; padding:0; margin-top:18px;" id="syncCard">
         <h2>Sincronizar entre aparelhos</h2>
@@ -2325,6 +2335,28 @@
         </div>
       </div>
       <div class="settings-app-info" id="appFooterInfo"><svg class=ic-svg aria-hidden=true><use href=#ic-book></use></svg> Estudo Certo · seus dados ficam só neste dispositivo</div>
+    </div>
+  </div>
+</div>
+
+<div class="quiz-overlay" id="helpOverlay">
+  <div class="quiz-modal" style="height:auto; max-height:88vh;">
+    <div class="quiz-header">
+      <button class="quiz-close" id="helpClose"><svg class=ic-svg aria-hidden=true><use href=#ic-close></use></svg></button>
+      <div class="quiz-progress">Ajuda</div>
+      <div class="quiz-title"></div>
+    </div>
+    <div class="quiz-body">
+      <div class="card" style="box-shadow:none; border:none; padding:0; margin-bottom:18px;" id="tutoriaisCard">
+        <h2>Tutoriais rápidos</h2>
+        <div class="settings-sub" style="margin-top:0;">Dúvidas pontuais sobre como funciona cada parte do app.</div>
+        <div id="tutoriaisList"></div>
+      </div>
+      <div class="card" style="box-shadow:none; border:none; padding:0;" id="manualCard">
+        <h2>Manual de funcionalidades</h2>
+        <div class="settings-sub" style="margin-top:0;">O que cada aba faz, de ponta a ponta.</div>
+        <div id="manualList"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -2913,12 +2945,12 @@ function load(){
 function save(){
   localStorage.setItem(STORE_KEY, JSON.stringify(state));
   // Espelha automaticamente num arquivo real na pasta de instalação, via o
-  // servidor local (ver secao "ARQUIVO LOCAL" mais abaixo). Assincrono e
-  // best-effort: nunca bloqueia nem quebra o fluxo normal (que sempre
-  // depende só do localStorage acima) - se o servidor nao estiver rodando
-  // (nao-Windows, ou app aberto sem o instalador), essa chamada so falha
-  // silenciosamente.
-  if(typeof localSrvPush==='function') localSrvPush();
+  // servidor local (ver secao "ARQUIVO LOCAL" mais abaixo). Só tentamos esse
+  // fetch pra localhost depois que o usuário confirmou manualmente (botão em
+  // Ajustes) que o servidor está rodando - window.localSrvActive. Tentar sem
+  // isso faria o Chrome mostrar, pra todo mundo, um prompt de permissão de
+  // acesso à rede local a cada salvamento, o que não queremos.
+  if(window.localSrvActive && typeof localSrvPush==='function') localSrvPush();
   // Se a sincronizacao na nuvem estiver configurada (ver secao "SINCRONIZACAO NA
   // NUVEM" mais abaixo), agenda um envio (com debounce, pra nao martelar a rede).
   if(typeof syncSchedulePush==='function') syncSchedulePush();
@@ -3986,6 +4018,12 @@ function renderSettingsControls(){
   const btnRefazerFav = document.getElementById('btnRefazerFavoritas');
   if(btnRefazerFav) btnRefazerFav.disabled = favoriteCount()===0;
 
+  wireTooltips(document.getElementById('settingsOverlay'));
+}
+// Conteúdo de Ajuda (tutoriais + manual) só é montado quando o usuário abre a
+// janela de Ajuda (botão "Ajuda" em Ajustes) - fica numa janela própria, separada
+// de Ajustes, em vez de uma lista comprida já expandida dentro das configurações.
+function renderHelpControls(){
   const tutWrap = document.getElementById('tutoriaisList');
   if(tutWrap && !tutWrap.dataset.built){
     tutWrap.innerHTML = TUTORIAIS.map(t=>`<div class="tut-item"><div class="tut-head"><b>${escapeHtml(t.titulo)}</b><span class="chev">▶</span></div><div class="tut-body">${escapeHtml(t.texto)}</div></div>`).join('');
@@ -3998,7 +4036,7 @@ function renderSettingsControls(){
     manualWrap.dataset.built = '1';
     manualWrap.querySelectorAll('.tut-head').forEach(h=> h.addEventListener('click', ()=> h.parentElement.classList.toggle('open')));
   }
-  wireTooltips(document.getElementById('settingsOverlay'));
+  wireTooltips(document.getElementById('helpOverlay'));
 }
 applyTheme();
 document.getElementById('themeOptLight').addEventListener('click', ()=> setTheme('light'));
@@ -4029,6 +4067,11 @@ document.getElementById('btnSettingsTab').addEventListener('click', ()=>{
   document.getElementById('settingsOverlay').classList.add('show');
 });
 document.getElementById('settingsClose').addEventListener('click', ()=> document.getElementById('settingsOverlay').classList.remove('show'));
+document.getElementById('btnOpenHelp').addEventListener('click', ()=>{
+  renderHelpControls();
+  document.getElementById('helpOverlay').classList.add('show');
+});
+document.getElementById('helpClose').addEventListener('click', ()=> document.getElementById('helpOverlay').classList.remove('show'));
 document.getElementById('btnRefazerFavoritas').addEventListener('click', ()=>{
   const favs = allFavoriteQuestions();
   if(favs.length===0){ toast('Nenhuma questão favoritada ainda '); return; }
@@ -4157,6 +4200,10 @@ function onbBodyAparencia(){
     <div class="theme-opt ${s.theme!=='dark'?'active':''}" data-theme-val="light"><span class="ic"><svg class=ic-svg aria-hidden=true><use href=#ic-sun></use></svg></span>Claro</div>
     <div class="theme-opt ${s.theme==='dark'?'active':''}" data-theme-val="dark"><span class="ic"><svg class=ic-svg aria-hidden=true><use href=#ic-moon></use></svg></span>Escuro</div>
   </div>
+  <div class="settings-sub" style="margin:14px 0 8px;">Tamanho da interface</div>
+  <div class="theme-toggle" id="onbSizeToggle">
+    ${SIZES.map(sz=>`<div class="theme-opt ${(s.size||'pequeno')===sz?'active':''}" data-size-val="${sz}">${sz==='pequeno'?'Pequeno':sz==='medio'?'Médio':'Grande'}</div>`).join('')}
+  </div>
   <div class="settings-sub" style="margin:14px 0 8px;">Cor de destaque</div>
   <div class="accent-row" id="onbAccentRow">${accentRow}</div>`;
 }
@@ -4212,6 +4259,9 @@ function renderOnbStep(){
     document.querySelectorAll('#onbThemeToggle .theme-opt').forEach(opt=>{
       opt.addEventListener('click', ()=>{ setTheme(opt.dataset.themeVal); syncOnbAparenciaUi(); });
     });
+    document.querySelectorAll('#onbSizeToggle .theme-opt').forEach(opt=>{
+      opt.addEventListener('click', ()=>{ setSize(opt.dataset.sizeVal); syncOnbAparenciaUi(); });
+    });
     document.querySelectorAll('#onbAccentRow .accent-swatch').forEach(sw=>{
       sw.addEventListener('click', ()=>{ setAccent(sw.dataset.accentVal); syncOnbAparenciaUi(); });
     });
@@ -4239,6 +4289,9 @@ function syncOnbAparenciaUi(){
   document.getElementById('onbBody').innerHTML = onbBodyAparencia();
   document.querySelectorAll('#onbThemeToggle .theme-opt').forEach(opt=>{
     opt.addEventListener('click', ()=>{ setTheme(opt.dataset.themeVal); syncOnbAparenciaUi(); });
+  });
+  document.querySelectorAll('#onbSizeToggle .theme-opt').forEach(opt=>{
+    opt.addEventListener('click', ()=>{ setSize(opt.dataset.sizeVal); syncOnbAparenciaUi(); });
   });
   document.querySelectorAll('#onbAccentRow .accent-swatch').forEach(sw=>{
     sw.addEventListener('click', ()=>{ setAccent(sw.dataset.accentVal); syncOnbAparenciaUi(); });
@@ -6633,6 +6686,7 @@ async function localSrvPing(){
   }catch(e){ return false; }
 }
 function fsRenderStatus(active){
+  window.localSrvActive = !!active;
   const statusEl = document.getElementById('fsLocalStatus');
   if(!statusEl) return;
   statusEl.textContent = active
@@ -6644,7 +6698,20 @@ async function fsTryDetect(){
   fsRenderStatus(active);
   return active;
 }
-fsTryDetect();
+// Importante: NÃO chamamos fsTryDetect() automaticamente ao carregar a página.
+// Um fetch pra localhost feito por um site público (mesmo que falhe/não exista
+// nada rodando) é tratado pelo Chrome como pedido de acesso à rede local do
+// aparelho, e mostra um prompt de permissão nativo assim que o site abre -
+// indesejado pra praticamente todo mundo, já que o servidor local só existe em
+// instalações feitas pelo instalador do Windows. Em vez disso, a checagem só
+// roda quando o usuário pede, clicando no botão dentro de Ajustes.
+const btnFsLocalCheck = document.getElementById('btnFsLocalCheck');
+if(btnFsLocalCheck) btnFsLocalCheck.addEventListener('click', async ()=>{
+  btnFsLocalCheck.disabled = true;
+  const active = await fsTryDetect();
+  btnFsLocalCheck.disabled = false;
+  if(!active) toast('Nenhum servidor local encontrado neste aparelho.');
+});
 
 /* ===================== SINCRONIZAÇÃO NA NUVEM (Supabase, opcional) =====================
    Sincroniza o progresso entre aparelhos usando conta de verdade (e-mail + senha),
