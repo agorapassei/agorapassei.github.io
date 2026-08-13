@@ -1220,7 +1220,13 @@
     max-height:200px; overflow-y:auto; font-size:.78rem; line-height:1.55; color:var(--text-mut); font-style:italic;
     white-space:pre-line;
   }
-  .quiz-image{width:100%; border-radius:12px; border:1px solid var(--border); margin-bottom:14px; display:block;}
+  /* Fotos/tabelas embutidas na questão vinham em resolução baixa (recorte de apostila) e
+     "width:100%" as esticava até a largura do modal (760px), ampliando além do tamanho
+     nativo e deixando texto da tabela borrado e desproporcional. Agora a imagem nunca
+     amplia além do próprio tamanho, fica centralizada e ganha uma moldura clara — como
+     um recorte colado na página, não uma imagem de fundo esticada. */
+  .quiz-image-wrap{display:flex; justify-content:center; margin-bottom:14px; background:var(--card); border:1px solid var(--border); border-radius:12px; padding:10px;}
+  .quiz-image{max-width:100%; width:auto; height:auto; max-height:60vh; display:block; border-radius:6px;}
   .quiz-navrow{display:flex; gap:8px; margin-bottom:14px;}
   .nav-ic{flex:1; border:1px solid var(--border); background:var(--card); border-radius:12px; padding:9px 6px; font-size:1rem; color:var(--text); cursor:pointer;}
   .nav-ic.finish{flex:1.6; background:var(--green-light); color:var(--green-dark); font-weight:700; font-size:.8rem;}
@@ -7667,7 +7673,7 @@ function renderQuizQuestion(){
     html += `<div class="quiz-imagem-faltando"><svg class=ic-svg aria-hidden=true><use href=#ic-image></use></svg> <b>Questão dependente de imagem.</b> As alternativas desta questão eram figuras que não foram extraídas da apostila, então ela ainda não dá para ser respondida aqui. Ela já está na fila de correção — abra a apostila em PDF para vê-la por inteiro, ou pule para a próxima.</div>`;
   }
   if(q.passage){ html += `<div class="quiz-passage">${escapeHtml(q.passage)}</div>`; }
-  if(q.image){ html += `<img class="quiz-image" src="${q.image}" alt="Imagem da questão">`; }
+  if(q.image){ html += `<div class="quiz-image-wrap"><img class="quiz-image" src="${q.image}" alt="Imagem da questão"></div>`; }
   if(q.tag){ html += `<div class="quiz-tag">${escapeHtml(q.tag)}</div>`; }
   html += `<div class="quiz-stem">${escapeHtml(q.stem)}</div>`;
   html += `<div class="quiz-options" id="quizOptions">`;
