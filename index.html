@@ -343,8 +343,8 @@
      --green/--green-dark/--yellow/--yellow-dark do tema ativo via color-mix() - nenhuma
      cor fixa fora da paleta (nada de azul/laranja soltos). "verde" e "amarelo" sao os dois
      tons base do tema; "fundo"/"contraste" sao a mesma familia em outro tom (mais escuro ou
-     mais claro), pra variar visualmente sem sair do tema escolhido (Petrobras verde, Agora
-     Passei etc.). */
+     mais claro), pra variar visualmente sem sair do tema escolhido (Verde Oficial, Estudo
+     Certo etc.). */
   /* Widgets do Painel: TODOS no mesmo tom, sem misturar card branco com card tintado.
      As variaveis --widget-* sao calculadas a partir de branco/preto puros (nao de
      --card), entao o modo "claro" fica genuinamente claro mesmo com o app inteiro no
@@ -1674,6 +1674,11 @@
   /* ===================== CONFIGURAÇÕES (tema, paleta, dados) =====================
      O botao que abre essa tela agora mora na barra inferior (depois de "Metas"),
      nao mais flutuando por cima do cabecalho. */
+  /* Tamanho da interface: reescala o font-size do <html> (não do body), pra tudo que usa
+     rem no app inteiro crescer proporcionalmente — igual ao zoom do navegador, mas persistido
+     nas configurações em vez de depender do zoom do navegador. */
+  html.size-medium{ font-size:115%; }
+  html.size-large{ font-size:130%; }
   .theme-toggle{display:flex; gap:8px; margin-bottom:16px;}
   .theme-opt{
     flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; padding:14px 8px;
@@ -2233,6 +2238,12 @@
           <div class="theme-opt" id="themeOptLight" data-theme-val="light"><span class="ic"><svg class=ic-svg aria-hidden=true><use href=#ic-sun></use></svg></span>Claro</div>
           <div class="theme-opt" id="themeOptDark" data-theme-val="dark"><span class="ic"><svg class=ic-svg aria-hidden=true><use href=#ic-moon></use></svg></span>Escuro</div>
         </div>
+        <div class="settings-sub" style="margin-bottom:8px;">Tamanho da interface</div>
+        <div class="theme-toggle" id="sizeToggle">
+          <div class="theme-opt" data-size-val="pequeno">Pequeno</div>
+          <div class="theme-opt" data-size-val="medio">Médio</div>
+          <div class="theme-opt" data-size-val="grande">Grande</div>
+        </div>
         <div class="settings-sub" style="margin-bottom:8px;">Cor de destaque</div>
         <div class="accent-row" id="accentRow"></div>
         <button class="btn ghost sm" id="btnReabrirOnboarding" style="margin-top:16px;"><svg class=ic-svg aria-hidden=true><use href=#ic-restart></use></svg> Refazer assistente de configuração inicial</button>
@@ -2245,15 +2256,22 @@
           <div class="form-row"><label>Minutos de intervalo</label><input type="number" id="cfgPomodoroBreak" min="5" max="60" step="5"></div>
         </div>
       </div>
+      <div class="card" style="box-shadow:none; border:none; padding:0; margin-bottom:18px; display:none;" id="installCard">
+        <h2>Instalar app</h2>
+        <div class="settings-sub" style="margin-top:0;">Instala o Estudo Certo neste dispositivo, como um app — abre em tela cheia, sem a barra do navegador.</div>
+        <button class="btn ghost sm" id="btnInstallApp"><svg class=ic-svg aria-hidden=true><use href=#ic-download></use></svg> Instalar</button>
+      </div>
       <div class="card" style="box-shadow:none; border:none; padding:0; margin-bottom:18px;" id="favoritosCard">
         <h2>Favoritos <span id="tipFavoritos"></span></h2>
         <div class="settings-sub" id="favoritosStatus">Toque na <svg class=ic-svg aria-hidden=true><use href=#ic-star></use></svg> durante uma questão pra favoritá-la e revisar depois, independente de ter acertado ou errado.</div>
         <button class="btn ghost sm" id="btnRefazerFavoritas"><svg class=ic-svg aria-hidden=true><use href=#ic-star-fill></use></svg> Refazer favoritas</button>
       </div>
       <div class="card" style="box-shadow:none; border:none; padding:0; margin-bottom:18px;" id="tutoriaisCard">
-        <h2>Tutoriais</h2>
-        <div class="settings-sub">Como funciona cada parte do app.</div>
+        <h2>Ajuda</h2>
+        <div class="settings-sub" style="margin-top:0;">Tutoriais rápidos</div>
         <div id="tutoriaisList"></div>
+        <div class="settings-sub" style="margin-top:16px;">Manual de funcionalidades — o que cada aba faz</div>
+        <div id="manualList"></div>
       </div>
       <div class="card" style="box-shadow:none; border:none; padding:0;">
         <h2>Dados</h2>
@@ -2366,6 +2384,50 @@ const ETAPA_EXERCICIOS = 0; // rec.stage===0 -> exercícios; 1..3 -> revisões; 
 const SUBJECT_COLORS = ['#f7a1a1','#a8d5a8','#a7d8f0','#f5b8d0','#e8dfa0','#9fb8c9','#c3e6a8','#f5f0b0','#f5c99a','#e0c9a6','#f2a6c9','#b8a8e0','#a8e0c9'];
 function subjectColor(si){ return SUBJECT_COLORS[si % SUBJECT_COLORS.length]; }
 const STORE_KEY = CURRICULO.storeKey;
+const STORE_KEY_LEGACY = CURRICULO.storeKeyLegacy || null;
+// Migração de nome: quem já tinha progresso salvo sob a chave antiga (do
+// tempo em que o app se chamava "Estudos PETROBRAS") tem esses dados
+// copiados automaticamente pra chave nova, uma única vez, sem perder nada.
+(function migrateStoreKey(){
+  try{
+    function moveKey(oldKey, newKey){
+      if(!oldKey || localStorage.getItem(newKey)) return; // já tem dado na chave nova, não sobrescreve
+      const old = localStorage.getItem(oldKey);
+      if(old) localStorage.setItem(newKey, old);
+    }
+    moveKey(STORE_KEY_LEGACY, STORE_KEY);
+    moveKey('petrobras-sync-project', 'estudo-certo-sync-project');
+    moveKey('petrobras-sync-session', 'estudo-certo-sync-session');
+    moveKey('petrobras-sync-lastts', 'estudo-certo-sync-lastts');
+  }catch(e){}
+})();
+
+// Instalação do app (Adicionar à tela inicial / instalar como PWA): o navegador
+// dispara "beforeinstallprompt" sozinho quando o app é instalável, e por padrão
+// mostra um banner/mini-infobar automático. Aqui a gente intercepta esse evento,
+// impede o aviso automático (preventDefault) e guarda ele pra só usar quando o
+// usuário clicar em "Instalar" dentro de Ajustes — instalar vira uma escolha,
+// não uma interrupção ao abrir o site.
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e)=>{
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  const card = document.getElementById('installCard');
+  if(card) card.style.display = '';
+});
+window.addEventListener('appinstalled', ()=>{
+  deferredInstallPrompt = null;
+  const card = document.getElementById('installCard');
+  if(card) card.style.display = 'none';
+});
+document.getElementById('btnInstallApp').addEventListener('click', async ()=>{
+  if(!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  const card = document.getElementById('installCard');
+  if(card) card.style.display = 'none';
+});
 const SUPABASE_URL_DEFAULT = CURRICULO.supabaseUrl || "";
 const SUPABASE_KEY_DEFAULT = CURRICULO.supabaseKey || "";
 const PAGE_TOTALS = CURRICULO.pageTotals;
@@ -2440,7 +2502,7 @@ async function abrirApostilaWeb(si, ai){
 function defaultState(){
   return { aulas:{}, dailyGoal:15, activity:{}, questions:{}, pageActivity:{}, subjectStages:{},
     sessions:[], activeSession:null, subjectWeights:{}, dashboard:null, ciclo:null,
-    settings:{ theme:'dark', accent:'apostila', pomodoro:{ focusMin:30, breakMin:10 } }, metaDataAlvo:null, answerLog:[], historicoCiclos:[],
+    settings:{ theme:'dark', accent:'apostila', size:'pequeno', pomodoro:{ focusMin:30, breakMin:10 } }, metaDataAlvo:null, answerLog:[], historicoCiclos:[],
     favorites:{}, onboardingDone:false, onboarding:null,
     reportes:[], provas:{}, stagesExercMigrado:true };
 }
@@ -3787,6 +3849,25 @@ const TUTORIAIS = [
   { titulo:'Widgets do Painel', texto:'No Painel, toque em "Personalizar" pra adicionar, remover, reordenar (arrastar) e redimensionar os cards. O botão de tamanho (⋮) abre as opções de largura de cada widget. A cor de fundo dos widgets (claro/escuro) é configurada aqui em Ajustes → Aparência, independente do tema geral do app.' },
   { titulo:'Metas e sequência de estudo', texto:'Defina uma meta diária de páginas em Metas, e acompanhe sua sequência de dias seguidos estudando (streak). Também dá pra definir uma data alvo pra terminar a teoria restante — o app calcula o ritmo necessário em páginas/dia pra chegar lá no prazo.' },
 ];
+// Manual de funcionalidades (Ajustes > Ajuda) - uma entrada por aba/área principal
+// do app, explicando o que ela faz de ponta a ponta (mais completo que os tutoriais
+// rápidos acima, que focam em dúvidas pontuais).
+const MANUAL_CATALOG = [
+  { titulo:'Painel', texto:'Tela inicial com widgets (cards) resumindo seu progresso: páginas lidas, questões respondidas, sequência de dias estudando, ranking por matéria, calendário de revisões e mais. Toque em "Personalizar" pra adicionar, remover, reordenar (arraste) e redimensionar cada widget, escolhendo só o que importa pra você acompanhar.' },
+  { titulo:'Matérias', texto:'Lista todas as matérias do edital com suas aulas/apostilas. Cada matéria mostra o progresso de leitura da teoria e a taxa de domínio das questões. Abra uma matéria pra ver aula por aula, abrir a apostila em PDF, marcar teoria como lida e responder as questões daquela aula.' },
+  { titulo:'Questões', texto:'Central de prática: responda questões de todas as matérias ativas de uma vez, ou filtre por uma matéria específica ou por uma apostila (aula) específica. Toda resposta dada por aqui conta igualmente pros seus índices de progresso e taxa de domínio, independente de por onde você entrou no quiz.' },
+  { titulo:'Tempo', texto:'Cronômetro de sessão de estudo, com modo livre ou Pomodoro (foco + intervalo, configurável em Ajustes → Sessão de estudo). Registra quanto tempo você estudou, pra alimentar as estimativas de ritmo e ajudar a bater sua meta semanal.' },
+  { titulo:'Ciclo', texto:'Monte um ciclo de estudos: defina quantas horas por semana pretende estudar e o app sugere um peso pra cada matéria (proporcional ao que falta ler), distribuindo as horas numa sequência que se repete. Ajuste pesos e quais matérias entram em "Replanejar" a qualquer momento — o ciclo se recalcula na hora.' },
+  { titulo:'Refazer', texto:'Junta automaticamente toda questão que você já errou e ainda não acertou depois — sai da lista sozinha assim que você acerta. É o jeito mais rápido de focar exatamente no que você ainda não domina, sem precisar procurar manualmente.' },
+  { titulo:'Revisão', texto:'Agenda de revisão espaçada: depois de estudar a teoria de uma aula e fazer os exercícios dela (em até 48h), o app agenda 3 revisões espaçadas (padrão 7 → 15 → 30 dias, editável por matéria). O calendário mostra o que está atrasado, hoje e programado; "Escolher o que revisar" deixa rever qualquer aula já concluída fora do cronograma, inclusive filtrando pelas que você marcou como difíceis.' },
+  { titulo:'Provas', texto:'Cadernos oficiais de concursos anteriores (CESGRANRIO), com gabarito oficial. Faça a prova inteira cronometrada como simulado, ou pratique só as questões de uma matéria específica dentro daquele caderno.' },
+  { titulo:'Metas', texto:'Defina quantas páginas de teoria estudar por dia e acompanhe sua sequência de dias seguidos (streak). Também dá pra definir uma data alvo pra terminar toda a teoria restante — o app calcula o ritmo necessário em páginas/dia e questões/dia pra chegar lá no prazo, comparando com seu ritmo atual.' },
+  { titulo:'Ajustes', texto:'Tema claro/escuro, cor de destaque, tamanho da interface (Pequeno/Médio/Grande), tempos de Pomodoro, favoritos, esta central de Ajuda, backup/restauração e zerar progresso, status do arquivo local, sincronização entre aparelhos (login/conta), instalação do app neste dispositivo, questões reportadas com erro e verificação de atualizações.' },
+  { titulo:'Sincronizar entre aparelhos', texto:'Crie uma conta (ou entre com uma existente) pra guardar seu progresso na nuvem e acessar de qualquer aparelho — sem isso, o progresso fica salvo só neste navegador/dispositivo. "Sincronizar agora" força uma atualização manual; "Sair" desconecta a conta deste aparelho sem apagar o que já foi sincronizado.' },
+  { titulo:'Favoritos', texto:'Marque qualquer questão com a estrela durante o quiz pra guardá-la numa lista pessoal de revisão — diferente de Refazer, aqui você escolhe manualmente o que quer rever, mesmo o que já acertou. Refaça a lista inteira a qualquer momento em Ajustes → Favoritos.' },
+  { titulo:'Reportar questão com erro', texto:'Encontrou gabarito errado, enunciado cortado ou imagem faltando numa questão? Toque no ícone de alerta dentro do quiz pra reportar. As questões reportadas se acumulam em Ajustes → Questões reportadas e são sincronizadas junto com seu progresso, pra revisão posterior.' },
+  { titulo:'Instalar o app', texto:'Em Ajustes → Instalar app, dá pra instalar o Estudo Certo neste dispositivo como um aplicativo de verdade — abre em tela cheia, sem a barra de endereço do navegador, e ganha um ícone próprio na tela inicial ou no menu de apps. O botão só aparece quando o navegador considera o app pronto pra instalação.' },
+];
 /* ===================== TOOLTIP (ⓘ) ===================== */
 function tipIcon(metricId){
   return `<span class="tip-ic" data-tip-id="${metricId}" title="">ⓘ</span>`;
@@ -3830,20 +3911,31 @@ const ACCENTS = [
   { id:'apostila', label:'Apostila (padrão)', cor:'#7A4530' },
   { id:'terracota', label:'Terracota', cor:'#9C4E33' },
   { id:'turquesa', label:'Turquesa', cor:'#0EA5A0' },
-  { id:'petrobras', label:'Petrobras', cor:'#046A38' },
+  { id:'petrobras', label:'Verde Oficial', cor:'#046A38' },
   { id:'azul', label:'Azul', cor:'#1d63c4' },
   { id:'roxo', label:'Roxo', cor:'#6f3fd1' },
   { id:'laranja', label:'Laranja', cor:'#d9720f' },
   { id:'vermelho', label:'Vermelho', cor:'#c23b3b' },
 ];
+const SIZES = ['pequeno','medio','grande'];
 function applyTheme(){
   const s = state.settings || { theme:'dark', accent:'apostila' };
   document.body.classList[s.theme==='dark' ? 'add' : 'remove']('theme-dark');
   ACCENTS.forEach(a=> document.body.classList.remove('accent-'+a.id));
   document.body.classList.add('accent-'+(s.accent || 'apostila'));
+  SIZES.forEach(sz=> document.documentElement.classList.remove('size-'+sz));
+  const size = s.size || 'pequeno';
+  if(size!=='pequeno') document.documentElement.classList.add('size-'+size);
 }
 function setTheme(theme){
   state.settings.theme = theme==='dark' ? 'dark' : 'light';
+  save();
+  applyTheme();
+  renderSettingsControls();
+}
+function setSize(size){
+  if(!SIZES.includes(size)) return;
+  state.settings.size = size;
   save();
   applyTheme();
   renderSettingsControls();
@@ -3861,6 +3953,13 @@ function renderSettingsControls(){
   const darkOpt = document.getElementById('themeOptDark');
   if(lightOpt) lightOpt.classList[s.theme!=='dark' ? 'add' : 'remove']('active');
   if(darkOpt) darkOpt.classList[s.theme==='dark' ? 'add' : 'remove']('active');
+  const sizeToggle = document.getElementById('sizeToggle');
+  if(sizeToggle){
+    const curSize = s.size || 'pequeno';
+    sizeToggle.querySelectorAll('.theme-opt').forEach(opt=>{
+      opt.classList[opt.dataset.sizeVal===curSize ? 'add' : 'remove']('active');
+    });
+  }
   const row = document.getElementById('accentRow');
   if(row){
     row.innerHTML = ACCENTS.map(a=>`<div class="accent-swatch${s.accent===a.id?' active':''}" data-accent-val="${a.id}" style="background:${a.cor};" title="${a.label}">${s.accent===a.id?'<svg class=ic-svg aria-hidden=true><use href=#ic-check></use></svg>':''}</div>`).join('');
@@ -3893,11 +3992,20 @@ function renderSettingsControls(){
     tutWrap.dataset.built = '1';
     tutWrap.querySelectorAll('.tut-head').forEach(h=> h.addEventListener('click', ()=> h.parentElement.classList.toggle('open')));
   }
+  const manualWrap = document.getElementById('manualList');
+  if(manualWrap && !manualWrap.dataset.built){
+    manualWrap.innerHTML = MANUAL_CATALOG.map(t=>`<div class="tut-item"><div class="tut-head"><b>${escapeHtml(t.titulo)}</b><span class="chev">▶</span></div><div class="tut-body">${escapeHtml(t.texto)}</div></div>`).join('');
+    manualWrap.dataset.built = '1';
+    manualWrap.querySelectorAll('.tut-head').forEach(h=> h.addEventListener('click', ()=> h.parentElement.classList.toggle('open')));
+  }
   wireTooltips(document.getElementById('settingsOverlay'));
 }
 applyTheme();
 document.getElementById('themeOptLight').addEventListener('click', ()=> setTheme('light'));
 document.getElementById('themeOptDark').addEventListener('click', ()=> setTheme('dark'));
+document.querySelectorAll('#sizeToggle .theme-opt').forEach(opt=>{
+  opt.addEventListener('click', ()=> setSize(opt.dataset.sizeVal));
+});
 
 // Sessão padrão Pomodoro (foco/intervalo), persistida em state.settings.pomodoro —
 // mesma storeKey do currículo, não uma chave solta nova.
@@ -6464,7 +6572,7 @@ document.getElementById('btnExport').addEventListener('click', ()=>{
   const blob = new Blob([JSON.stringify(state,null,2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = 'backup-estudos-petrobras-'+todayStr()+'.json';
+  a.href = url; a.download = 'backup-estudo-certo-'+todayStr()+'.json';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
   toast("Backup exportado");
@@ -6549,9 +6657,9 @@ fsTryDetect();
    Estratégia de conflito: "o mais recente vence" (compara updated_at). Não faz merge
    campo a campo - se a mesma conta estudar em dois aparelhos ao mesmo tempo sem
    sincronizar entre as sessões, o que sincronizar por último sobrescreve o outro. */
-const SYNC_PROJECT_KEY = 'petrobras-sync-project'; // { url, key } do projeto Supabase (nao muda por usuario)
-const SYNC_SESSION_KEY = 'petrobras-sync-session'; // { access_token, refresh_token, expires_at, user_id, email }
-const SYNC_LASTTS_KEY = 'petrobras-sync-lastts';
+const SYNC_PROJECT_KEY = 'estudo-certo-sync-project'; // { url, key } do projeto Supabase (nao muda por usuario)
+const SYNC_SESSION_KEY = 'estudo-certo-sync-session'; // { access_token, refresh_token, expires_at, user_id, email }
+const SYNC_LASTTS_KEY = 'estudo-certo-sync-lastts';
 function syncProjectConfig(){
   try{ return JSON.parse(localStorage.getItem(SYNC_PROJECT_KEY)||'null'); }catch(e){ return null; }
 }

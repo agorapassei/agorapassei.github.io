@@ -4,7 +4,8 @@
    tudo isso de window.CURRICULO e nao tem nada fixo de Petrobras nele.
    ========================================================================= */
 window.CURRICULO = {
-  storeKey: "petrobras-study-tracker-v1",
+  storeKey: "estudo-certo-v1",
+  storeKeyLegacy: "petrobras-study-tracker-v1",
   tema: {
     nome: "Estudo Certo",
     corPrimaria: "#046A38",
