@@ -1150,6 +1150,30 @@
     align-items:flex-end; justify-content:center;
   }
   .quiz-overlay.show{display:flex;}
+
+  /* Portão de login: cobre a tela inteira ANTES de qualquer dado pessoal ser
+     desenhado - o app só chama bootApp()/renderAll() depois que o login é
+     confirmado no servidor (ver authBoot() no fim do script). Fica acima de
+     tudo (inclusive dos outros overlays) e trava o scroll por trás. */
+  #authGate{
+    position:fixed; inset:0; z-index:99999; background:var(--bg);
+    display:flex; align-items:center; justify-content:center; padding:24px;
+  }
+  body.auth-locked{overflow:hidden;}
+  .auth-card{width:100%; max-width:360px; text-align:center;}
+  .auth-card .ic{
+    width:52px; height:52px; border-radius:14px; background:var(--green); color:var(--yellow, #FCD116);
+    display:flex; align-items:center; justify-content:center; margin:0 auto 18px; font-size:1.4rem; font-weight:800;
+  }
+  .auth-card h1{font-size:1.3rem; margin:0 0 6px;}
+  .auth-card p{color:var(--text-mut); font-size:.88rem; margin:0 0 22px; line-height:1.5;}
+  .auth-card input{
+    width:100%; box-sizing:border-box; padding:12px 14px; border-radius:10px; border:1px solid var(--border);
+    background:var(--card); color:var(--text); font-size:.92rem; margin-bottom:10px;
+  }
+  .auth-card .data-btns{margin-top:6px;}
+  .auth-card .data-btns .btn{flex:1;}
+  #authGateMsg{min-height:1.2em; font-size:.8rem; color:var(--danger, #c0392f); margin-top:12px;}
   .quiz-modal{
     background:var(--bg); width:100%; max-width:760px; height:92vh; border-radius:22px 22px 0 0;
     display:flex; flex-direction:column; overflow:hidden; animation:slideup .25s ease;
@@ -1731,7 +1755,24 @@
   .distrib-legend-row .pct{font-weight:800; color:var(--text-mut);}
 </style>
 </head>
-<body>
+<body class="auth-locked">
+<!-- Portão de login: primeiro elemento do body de propósito, visível antes de
+     qualquer script rodar (display:flex inline, não depende de CSS carregar a
+     tempo). Some só depois que authBoot() confirma sessão válida no servidor. -->
+<div id="authGate" style="display:flex;">
+  <div class="auth-card">
+    <div class="ic">✓</div>
+    <h1>Estudo Certo</h1>
+    <p>Acesso restrito a e-mails autorizados. Entre com sua conta para continuar.</p>
+    <input type="email" id="authGateEmail" placeholder="E-mail" autocomplete="username">
+    <input type="password" id="authGatePassword" placeholder="Senha" autocomplete="current-password">
+    <div class="data-btns">
+      <button class="btn" id="authGateSignIn">Entrar</button>
+      <button class="btn ghost" id="authGateSignUp">Criar conta</button>
+    </div>
+    <div id="authGateMsg"></div>
+  </div>
+</div>
 <!-- Redesign "apostila" · gerado em 2026-08-12 16:14 a partir de Redesign/src/index.html
      Direção: seed efdd7471, candidata 6 de 7 (Impeccable 4.0.4, roll degradado).
      Decisões: design/DECISOES.md · Continuidade: CONTEXTO.md -->
@@ -8584,11 +8625,99 @@ document.addEventListener('keydown', e=>{
   else if(e.key==='PageUp'){ cadIrPagina(cad.pagina-1); e.preventDefault(); }
   else if(e.key==='Escape'){ fecharCaderno(); e.preventDefault(); }
 });
-// Fecha a etapa de exercícios de quem já tinha respondido todas as questões antes dessa
-// etapa existir (ou respondeu fora do app), em silêncio, antes da primeira renderização.
-verificarEtapaExercicios(true);
-renderAll();
-maybeShowOnboarding();
+/* ===================== PORTÃO DE LOGIN =====================
+   O app só desenha dado nenhum (renderAll) depois que authBoot() confirma,
+   direto no servidor, que existe uma sessão válida - não basta ter um token
+   guardado no localStorage (poderia estar expirado, revogado ou forjado).
+   Sem sessão válida, quem abre o link ou digita o endereço só vê o portão. */
+function bootApp(){
+  // Fecha a etapa de exercícios de quem já tinha respondido todas as questões antes dessa
+  // etapa existir (ou respondeu fora do app), em silêncio, antes da primeira renderização.
+  verificarEtapaExercicios(true);
+  renderAll();
+  maybeShowOnboarding();
+}
+function hideAuthGate(){
+  const gate = document.getElementById('authGate');
+  if(gate) gate.style.display = 'none';
+  document.body.classList.remove('auth-locked');
+}
+function showAuthGate(){
+  const gate = document.getElementById('authGate');
+  if(gate) gate.style.display = 'flex';
+  document.body.classList.add('auth-locked');
+}
+async function authVerifyServer(token){
+  try{
+    const cfg = syncEffectiveProjectConfig();
+    const url = cfg.url.replace(/\/$/,'') + '/auth/v1/user';
+    const res = await fetch(url, { headers:{ apikey:cfg.key, Authorization:'Bearer '+token } });
+    return res.ok;
+  }catch(e){ return false; }
+}
+async function authGateSignInClick(){
+  const email = (document.getElementById('authGateEmail').value||'').trim();
+  const password = document.getElementById('authGatePassword').value||'';
+  const msgEl = document.getElementById('authGateMsg');
+  const btn = document.getElementById('authGateSignIn');
+  if(!email || !password){ msgEl.textContent = 'Preencha e-mail e senha.'; return; }
+  btn.disabled = true; msgEl.textContent = '';
+  try{
+    const body = await syncSignIn(email, password);
+    if(!body.access_token) throw new Error('Não foi possível entrar.');
+    syncSaveSessionFromAuthResponse(body);
+    hideAuthGate();
+    bootApp();
+    syncRun();
+  }catch(e){
+    msgEl.textContent = 'Não consegui entrar: ' + (e.message||'confira e-mail e senha.');
+  }finally{
+    btn.disabled = false;
+  }
+}
+async function authGateSignUpClick(){
+  const email = (document.getElementById('authGateEmail').value||'').trim();
+  const password = document.getElementById('authGatePassword').value||'';
+  const msgEl = document.getElementById('authGateMsg');
+  const btn = document.getElementById('authGateSignUp');
+  if(!email || !password){ msgEl.textContent = 'Preencha e-mail e senha.'; return; }
+  if(password.length < 6){ msgEl.textContent = 'A senha precisa ter pelo menos 6 caracteres.'; return; }
+  btn.disabled = true; msgEl.textContent = '';
+  try{
+    const body = await syncSignUp(email, password);
+    if(body.access_token){
+      syncSaveSessionFromAuthResponse(body);
+      hideAuthGate();
+      bootApp();
+      syncRun();
+    } else {
+      msgEl.style.color = 'var(--green-dark, inherit)';
+      msgEl.textContent = 'Conta criada! Se o projeto exigir confirmação por e-mail, confirme e depois clique em "Entrar".';
+    }
+  }catch(e){
+    msgEl.style.color = '';
+    msgEl.textContent = 'Não consegui criar a conta. Esse e-mail pode não estar autorizado neste app.';
+  }finally{
+    btn.disabled = false;
+  }
+}
+document.getElementById('authGateSignIn').addEventListener('click', authGateSignInClick);
+document.getElementById('authGateSignUp').addEventListener('click', authGateSignUpClick);
+document.getElementById('authGatePassword').addEventListener('keydown', e=>{ if(e.key==='Enter') authGateSignInClick(); });
+
+(async function authBoot(){
+  if(syncEnabled()){
+    const token = await syncEnsureValidToken();
+    if(token && await authVerifyServer(token)){
+      hideAuthGate();
+      bootApp();
+      return;
+    }
+    // token ausente, expirado ou revogado no servidor - não confia no que sobrou local
+    syncClearSession();
+  }
+  showAuthGate();
+})();
 </script>
 </body>
 </html>
