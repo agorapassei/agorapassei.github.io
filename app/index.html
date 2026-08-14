@@ -1656,29 +1656,36 @@
   .ciclo-puxar-row.pior .def{font-weight:700; color:var(--mat-cor);}
 
   /* ---- Calendário da semana (Ciclo) ---- */
-  .cal-grid{display:flex; gap:8px; overflow-x:auto; padding-bottom:6px; -webkit-overflow-scrolling:touch;}
-  .cal-day-col{flex:0 0 116px; min-height:64px; background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:8px 6px; transition:background .12s ease, border-color .12s ease;}
+  /* Grid de 7 colunas ocupando a largura toda (sem scroll horizontal) - materias com nome
+     longo quebram linha e a caixa cresce em altura pra caber o nome inteiro, em vez de cortar. */
+  .cal-grid{display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:4px;}
+  .cal-day-col{min-height:56px; background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:6px 3px; transition:background .12s ease, border-color .12s ease; min-width:0;}
   .cal-day-col.hoje{border-color:var(--green); box-shadow:inset 0 0 0 1px var(--green);}
   .cal-day-col.cal-drop-hover{background:color-mix(in srgb, var(--green) 10%, var(--bg));}
-  .cal-day-hd{text-align:center; margin-bottom:8px;}
-  .cal-day-hd .nm{font-size:.74rem; font-weight:800; color:var(--text);}
-  .cal-day-hd .dt{font-size:.64rem; color:var(--text-mut);}
-  .cal-day-hd .pg{font-size:.64rem; color:var(--text-mut); margin-top:1px;}
-  .cal-day-empty{font-size:.66rem; color:var(--text-mut); text-align:center; padding:10px 2px; opacity:.7;}
+  .cal-day-hd{text-align:center; margin-bottom:6px;}
+  .cal-day-hd .nm{font-size:.66rem; font-weight:800; color:var(--text);}
+  .cal-day-hd .dt{font-size:.56rem; color:var(--text-mut);}
+  .cal-day-hd .pg{font-size:.56rem; color:var(--text-mut); margin-top:1px;}
+  .cal-day-empty{font-size:.58rem; color:var(--text-mut); text-align:center; padding:8px 1px; opacity:.7;}
   .cal-block{
     --mat-cor:#ccc;
     background:color-mix(in srgb, var(--mat-cor) 22%, var(--card));
-    border-left:4px solid var(--mat-cor);
-    border-radius:8px; padding:7px 8px; margin-bottom:6px; font-size:.68rem; font-weight:700; color:var(--text);
+    border-left:3px solid var(--mat-cor);
+    border-radius:7px; padding:5px 5px; margin-bottom:5px; font-size:.6rem; font-weight:700; color:var(--text);
     cursor:grab; touch-action:none; user-select:none; -webkit-user-select:none;
-    display:flex; align-items:center; justify-content:space-between; gap:4px;
+    display:flex; flex-direction:column; align-items:flex-start; gap:3px;
     transition:opacity .12s ease, border-top-width .1s ease, border-bottom-width .1s ease;
   }
-  .cal-block .cal-block-nm{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-  .cal-block svg{width:13px; height:13px; flex-shrink:0; color:var(--mat-cor);}
+  .cal-block .cal-block-nm{white-space:normal; word-break:break-word; overflow-wrap:anywhere; line-height:1.2;}
+  .cal-block .cal-block-dur{font-size:.52rem; font-weight:600; color:var(--text-mut); opacity:.85;}
+  .cal-block svg{width:11px; height:11px; flex-shrink:0; color:var(--mat-cor);}
   .cal-block.done{opacity:.55; cursor:default;}
   .cal-block.inativa{opacity:.4; text-decoration:line-through;}
   .cal-block.cal-dragging{opacity:.35;}
+  /* Par por padrao (2 blocos de 30min seguidos da mesma materia = 1h): funde a borda entre
+     eles pra parecer uma pilula so, mesmo cada um continuando um bloco independente. */
+  .cal-block.join-bottom{margin-bottom:1px; border-bottom-left-radius:0; border-bottom-right-radius:0;}
+  .cal-block.join-top{margin-top:-1px; border-top-left-radius:0; border-top-right-radius:0; border-top:1px dashed color-mix(in srgb, var(--mat-cor) 50%, transparent);}
   .cal-block.cal-drop-before{border-top:3px solid var(--green);}
   .cal-block.cal-drop-after{border-bottom:3px solid var(--green);}
   .cal-drag-ghost{position:fixed; z-index:999; pointer-events:none; opacity:.9; box-shadow:0 8px 22px rgba(0,0,0,.3); transform:rotate(-2deg);}
@@ -3192,15 +3199,25 @@ function endActiveSession(extra){
       sessao.questoesManual = { count: extra.questoesCount, correct: extra.questoesCorrect||0 };
     }
   }
-  state.sessions.push(sessao);
+  state.sessions.push(sessao); // conta pra todas as metricas gerais de tempo e pro Ciclo (cicloEstudadoSegundos etc.) independente de ter vindo do calendario e de ter batido os 30min ou nao - ver comentario abaixo
   state.activeSession = null;
   // Se essa sessao nasceu de um clique num bloco do Calendario da Semana, marca aquele
-  // bloco especifico como concluido (ver abrirSessaoBloco/openStartSessionModal). Sessao
-  // iniciada pelo fluxo normal (Materias, Puxar sessao agora) nao mexe em bloco nenhum.
+  // bloco especifico como concluido - MAS so se o tempo liquido bateu a duracao cheia do
+  // bloco (30 ou 45min - ver duracaoMin/construirItensMateria) numa unica sessao. Encerrou antes da hora: o bloco
+  // continua em aberto (o usuario pode clicar nele de novo depois pra tentar bater o tempo
+  // completo; nao acumula tempo parcial entre sessoes diferentes - de proposito, pra manter
+  // simples). Isso so afeta a marcacao visual "concluido" do bloco - o tempo estudado, mesmo
+  // parcial, ja foi contado ali em cima (state.sessions.push), entao sempre entra nas
+  // metricas gerais de Tempo e no progresso do Ciclo (cicloEstudadoSegundos), tenha batido a
+  // duracao do bloco ou nao. Sessao iniciada pelo fluxo normal (Materias, Puxar sessao agora)
+  // nao mexe em bloco nenhum.
   if(activeSessionCalendarRef){
     const c = state.calendario;
     const bloco = c && c.blocos[activeSessionCalendarRef.dia] && c.blocos[activeSessionCalendarRef.dia][activeSessionCalendarRef.idx];
-    if(bloco && bloco.si===a.si){ bloco.done = true; bloco.sessionId = sessao.id; }
+    if(bloco && bloco.si===a.si && tempoLiquidoSegundos >= (bloco.duracaoMin||30)*60){
+      bloco.done = true;
+      bloco.sessionId = sessao.id;
+    }
     activeSessionCalendarRef = null;
   }
   markActivity();
@@ -3937,22 +3954,57 @@ function distribuirInteiros(pesos, total){
   chaves.forEach(k=> out[k]=info[k].inteiro);
   return out;
 }
-// Achata um mapa {chave: quantidade} numa sequência intercalada (round-robin ponderado):
-// em vez de "AAAA BBB CC", produz algo como "ABABACABAC" - espalha as matérias ao longo
-// da semana em vez de empilhar vários blocos seguidos da mesma.
-function intercalarPorContagem(contagens){
-  const itens = Object.keys(contagens).filter(k=>contagens[k]>0).map(k=>({ chave:k, total:contagens[k], feito:0 }));
-  const totalGeral = itens.reduce((s,it)=>s+it.total,0);
+// Converte a quantidade de blocos de 30min que uma matéria recebeu na semana (unidades30)
+// numa lista de ITENS pra intercalar. Todo bloco é de 30min ou 45min - nunca 15 nem 60. Por
+// padrão os blocos de 30min vêm agrupados em PARES (2 blocos de 30min da mesma matéria, lado
+// a lado = 1h). O déficit real da matéria pode não fechar num múltiplo de 30min - o Ciclo já
+// trabalha com incrementos de 15min (ver arredondar15min/cicloMetaSegundos) - então, quando
+// sobra uma fração de 15min, ela é absorvida por UM dos blocos de 30min, que vira 45min em vez
+// de existir um bloco avulso de 15min. Como todo múltiplo de 15min a partir de 30 pode ser
+// escrito como soma de 30s e no máximo um 45 (30a+45 ou só 30s), isso sempre fecha o tempo
+// exato da matéria, sem arredondar. Nunca aloca mais tempo do que realmente falta.
+function construirItensMateria(si, unidades30){
+  if(unidades30<=0) return [];
+  let minutosTotal = unidades30*30;
+  const deficitReal = Math.max(0, cicloMetaSegundos(si)-cicloEstudadoSegundos(si));
+  if(deficitReal>0){
+    const deficitMin = arredondar15min(deficitReal)/60; // sempre multiplo de 15, piso 30
+    if(deficitMin < minutosTotal) minutosTotal = deficitMin;
+  }
+  if(minutosTotal<=0) return [];
+  const temBloco45 = (minutosTotal%30)>0; // sobra 15min - um bloco de 30 vira 45 pra absorver
+  let blocos30 = Math.floor(minutosTotal/30) - (temBloco45?1:0);
+  const itens = [];
+  let restantes = Math.max(0, blocos30);
+  while(restantes>=2){ itens.push({ si, qtd:2, min:30 }); restantes -= 2; }
+  if(restantes>0) itens.push({ si, qtd:1, min:30 });
+  if(temBloco45) itens.push({ si, qtd:1, min:45 }); // fecha o tempo exato - fica por ultimo
+  return itens;
+}
+// Intercala os itens (pares de 30min, avulsos de 30min ou o bloco de 45min - ver
+// construirItensMateria) numa sequência única, proporcional ao total de MINUTOS de cada
+// matéria - round-robin ponderado,
+// pra não empilhar várias matérias diferentes seguidas na semana. Um par nunca é quebrado em
+// dois itens da sequência (fica sempre junto, ver gerarSemanaCalendario pro preenchimento por
+// dia).
+function intercalarItensPorMateria(itensPorMateria){
+  const filas = Object.keys(itensPorMateria).map(siStr=>{
+    const fila = itensPorMateria[siStr].slice();
+    return { fila, totalMin: fila.reduce((s,x)=>s+x.qtd*x.min,0), feitoMin:0 };
+  });
   const out = [];
-  for(let i=0;i<totalGeral;i++){
+  let restam = filas.reduce((s,f)=>s+f.fila.length,0);
+  while(restam>0){
     let melhor=null, melhorScore=Infinity;
-    itens.forEach(it=>{
-      if(it.feito>=it.total) return;
-      const score = it.feito/it.total;
-      if(score<melhorScore){ melhorScore=score; melhor=it; }
+    filas.forEach(f=>{
+      if(!f.fila.length) return;
+      const score = f.totalMin>0 ? f.feitoMin/f.totalMin : Infinity;
+      if(score<melhorScore){ melhorScore=score; melhor=f; }
     });
-    melhor.feito++;
-    out.push(melhor.chave);
+    const item = melhor.fila.shift();
+    melhor.feitoMin += item.qtd*item.min;
+    out.push(item);
+    restam--;
   }
   return out;
 }
@@ -3969,7 +4021,7 @@ function gerarSemanaCalendario(forcar){
     save();
     return;
   }
-  const totalBlocos = Math.max(0, Math.round(cc.horasPorSemana*2));
+  const totalBlocos = Math.max(0, Math.round(cc.horasPorSemana*2)); // unidades de 30min na semana toda
   // Base de distribuicao entre materias: deficit atual (o que "empurra" pendencia pra
   // frente); se ninguem tem deficit (ciclo em dia/quase fechando), cai pro peso normal
   // pra semana nao ficar vazia bem no fim do ciclo.
@@ -3987,18 +4039,43 @@ function gerarSemanaCalendario(forcar){
     save();
     return;
   }
-  const blocosPorMateria = distribuirInteiros(baseMaterias, totalBlocos);
-  const sequencia = intercalarPorContagem(blocosPorMateria); // length === totalBlocos, indices de materia
+  const blocosPorMateria = distribuirInteiros(baseMaterias, totalBlocos); // unidades de 30min por materia
+  const itensPorMateria = {};
+  Object.keys(blocosPorMateria).forEach(siStr=>{
+    const lista = construirItensMateria(Number(siStr), blocosPorMateria[siStr]);
+    if(lista.length) itensPorMateria[siStr] = lista;
+  });
+  const sequenciaItens = intercalarItensPorMateria(itensPorMateria); // array de {si, qtd, min}
   let diasPeso = {};
   DIAS_SEMANA.forEach(d=>{ if((c.diasPeso[d]||0)>0) diasPeso[d]=c.diasPeso[d]; });
   if(Object.keys(diasPeso).length===0) DIAS_SEMANA.forEach(d=> diasPeso[d]=1); // fallback defensivo
-  const blocosPorDia = distribuirInteiros(diasPeso, totalBlocos);
+  const blocosPorDia = distribuirInteiros(diasPeso, totalBlocos); // capacidade de cada dia, em unidades de 30min
+  function expandirItens(lista){
+    const out = [];
+    lista.forEach(item=>{ for(let i=0;i<item.qtd;i++) out.push({ si:item.si, duracaoMin:item.min, done:false, sessionId:null }); });
+    return out;
+  }
+  // Preenche cada dia ate estourar sua capacidade (em minutos) - nunca quebra um par (nem a
+  // fracao de 15min) no meio, entao um dia pode passar um pouco da capacidade quando o ultimo
+  // item que coube for maior que o espaco exato que sobrou.
   let cursor = 0;
   DIAS_SEMANA.forEach(d=>{
-    const n = blocosPorDia[d]||0;
-    c.blocos[d] = sequencia.slice(cursor, cursor+n).map(siStr=>({ si:Number(siStr), done:false, sessionId:null }));
-    cursor += n;
+    const capMin = (blocosPorDia[d]||0)*30;
+    const doDia = [];
+    let usadosMin = 0;
+    while(cursor<sequenciaItens.length && (usadosMin===0 || usadosMin<capMin) && capMin>0){
+      doDia.push(sequenciaItens[cursor]);
+      usadosMin += sequenciaItens[cursor].qtd*sequenciaItens[cursor].min;
+      cursor++;
+    }
+    c.blocos[d] = expandirItens(doDia);
   });
+  // Sobra de arredondamento (ex: ultimo dia com peso 0): joga tudo que nao coube no ultimo
+  // dia com peso>0, pra nunca perder item gerado.
+  if(cursor<sequenciaItens.length){
+    let diaDestino = DIAS_SEMANA.slice().reverse().find(d=>(c.diasPeso[d]||0)>0) || 'dom';
+    c.blocos[diaDestino] = (c.blocos[diaDestino]||[]).concat(expandirItens(sequenciaItens.slice(cursor)));
+  }
   save();
 }
 // Chamada no render da aba Ciclo: garante que a semana em tela corresponde a semana-calendario
@@ -4139,7 +4216,7 @@ const EXTRA_TIPS = {
   },
   calendario_semana: {
     titulo: 'Calendário da semana',
-    tooltip: 'Pega a meta de horas de cada matéria no Ciclo e distribui em blocos de 30min ao longo dos 7 dias. Cada semana nova é montada olhando o que ainda falta de verdade (o déficit de cada matéria) — então o que não foi estudado numa semana automaticamente puxa mais blocos na semana seguinte, sem nunca passar do total que falta no ciclo. Arraste um bloco pra outro dia ou posição pra reorganizar sua semana. Toque num bloco pra iniciar o cronômetro daquela matéria — ele vira concluído sozinho quando a sessão termina. O botão de recarregar recalcula a semana atual do zero, a partir do déficit e dos pesos de agora (isso descarta os arrastos manuais feitos nela).'
+    tooltip: 'Pega a meta de horas de cada matéria no Ciclo e distribui em blocos de 30 ou 45min ao longo dos 7 dias — por padrão, matérias com mais de 30min naquela semana já nascem em pares (dois blocos de 30min lado a lado, formando 1h). Quando o tempo que falta numa matéria não fecha num múltiplo de 30min (o Ciclo trabalha em incrementos de 15min), um dos blocos daquela matéria vira 45min em vez de 30, pra fechar o tempo certinho sem arredondar. Cada semana nova é montada olhando o que ainda falta de verdade (o déficit de cada matéria) — então o que não foi estudado numa semana automaticamente puxa mais blocos na semana seguinte, sem nunca passar do total que falta no ciclo. Arraste um bloco pra outro dia ou posição pra reorganizar sua semana; passe o mouse (ou segure) num bloco pra ver quanto falta nele. Toque num bloco pra iniciar o cronômetro daquela matéria — ele só vira concluído se o tempo líquido da sessão bater a duração cheia do bloco de uma vez (30 ou 45min; encerrou antes? o bloco continua em aberto, toque nele de novo depois pra tentar de novo). Todo tempo estudado sempre conta nas métricas gerais de Tempo e no progresso do Ciclo, tenha o bloco fechado ou não. O botão de recarregar recalcula a semana atual do zero, a partir do déficit e dos pesos de agora (isso descarta os arrastos manuais feitos nela).'
   }
 };
 // Conteúdo da central de ajuda (Ajustes > Tutoriais) - explicações curtas de como cada
@@ -8948,8 +9025,21 @@ function renderCalendario(){
       ? `<div class="cal-day-empty">livre</div>`
       : blocos.map((b,idx)=>{
           const ativa = isSubjectActive(b.si);
-          return `<div class="cal-block${b.done?' done':''}${ativa?'':' inativa'}" data-dia="${d}" data-idx="${idx}" data-si="${b.si}" style="--mat-cor:${subjectColor(b.si)}">
+          const dur = b.duracaoMin||30;
+          // Duas unidades seguidas da mesma materia nasceram como par (default = 1h) - so um
+          // detalhe visual (fundem a borda entre elas), cada uma continua sendo um bloco
+          // independente pra arrastar/concluir. Blocos de 30min sao o padrao; o rotulo de
+          // duracao so aparece quando o bloco e a fracao de 15min que fecha o tempo exato de
+          // uma materia (ver construirItensMateria).
+          const juntaAntes = idx>0 && blocos[idx-1].si===b.si;
+          const juntaDepois = idx<blocos.length-1 && blocos[idx+1].si===b.si;
+          const joinCls = (juntaAntes?' join-top':'')+(juntaDepois?' join-bottom':'');
+          const titulo = b.done
+            ? `${SUBJECTS[b.si].name} — concluído (${dur}min)`
+            : `${SUBJECTS[b.si].name} — faltam ${dur}min nesta sessão (só fecha se o cronômetro bater os ${dur}min de uma vez)`;
+          return `<div class="cal-block${joinCls}${b.done?' done':''}${ativa?'':' inativa'}" data-dia="${d}" data-idx="${idx}" data-si="${b.si}" style="--mat-cor:${subjectColor(b.si)}" title="${escapeHtml(titulo)}">
             <span class="cal-block-nm">${escapeHtml(SUBJECTS[b.si].name)}</span>
+            ${dur!==30?`<span class="cal-block-dur">${dur}min</span>`:''}
             ${b.done?'<svg class=ic-svg aria-hidden=true><use href=#ic-check></use></svg>':''}
           </div>`;
         }).join('');
