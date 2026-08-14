@@ -483,6 +483,38 @@
   .aula-txt .nm{font-size:.9rem; font-weight:650; display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
   .aula-txt .dt{font-size:.72rem; color:var(--text-mut); margin-top:2px;}
 
+  /* Highlight temporário quando se chega numa aula por um link (ex: aba Edital ->
+     "ir para a aula"), pra confirmar visualmente qual linha é a de destino do scroll. */
+  @keyframes flashRow{
+    0%{box-shadow:0 0 0 3px color-mix(in srgb, var(--green) 55%, transparent); background:color-mix(in srgb, var(--green) 12%, var(--card));}
+    100%{box-shadow:0 0 0 0 transparent; background:var(--card);}
+  }
+  .aula-row.flash{animation:flashRow 1.5s ease-out;}
+
+  /* Aba Edital: cada item do conteúdo programático vira um cartãozinho com as aulas que
+     cobrem ele (clicáveis, levam direto pra aula em Matérias) e as duas visões separadas
+     que foram pedidas — teoria concluída e domínio em questões — sem misturar as duas
+     num critério só, porque uma aula pode estar lida mas com questões ainda fracas. */
+  .edital-item{padding:12px 14px; margin-bottom:8px; border-radius:12px; background:var(--card); border:1px solid var(--border);}
+  .edital-item:last-child{margin-bottom:0;}
+  .edital-item.coberto{border-color:color-mix(in srgb, var(--green) 35%, var(--border));}
+  .edital-item-nm{font-size:.88rem; font-weight:650; margin-bottom:8px;}
+  .edital-aulas{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;}
+  .edital-aula-link{
+    display:inline-flex; align-items:center; gap:5px; font-size:.72rem; font-weight:600;
+    padding:5px 10px; border-radius:999px; border:1px solid var(--border); background:var(--bg);
+    color:var(--text); cursor:pointer;
+  }
+  .edital-aula-link:hover{border-color:var(--green); color:var(--green-dark);}
+  .edital-aula-link .dot{width:7px; height:7px; border-radius:50%; background:color-mix(in srgb, var(--text-mut) 55%, transparent); flex-shrink:0;}
+  .edital-aula-link .dot.on{background:var(--green);}
+  .edital-status-row{display:flex; flex-wrap:wrap; gap:14px;}
+  .edital-status{font-size:.72rem; color:var(--text-mut); display:flex; align-items:center; gap:5px;}
+  .edital-status b{color:var(--text); font-weight:700;}
+  .edital-status .status-dot{margin-right:1px;}
+  .edital-bloco-hd{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:2px;}
+  .edital-bloco-pct{font-size:.75rem; color:var(--text-mut); font-weight:700; flex-shrink:0;}
+
   /* Status dot simples (bolinha), pra listas mais compactas tipo tabela de atividades -
      complementa o .chk (que e clicavel/quadrado) com uma variante so-leitura, redonda. */
   .status-dot{width:9px; height:9px; border-radius:50%; flex-shrink:0; background:color-mix(in srgb, var(--text-mut) 55%, transparent); display:inline-block;}
@@ -6231,6 +6263,7 @@ function renderAulasDaMateria(siAlvo, filter){
       const rec = getAula(si,ai);
       const row = document.createElement('div');
       row.className='aula-row';
+      row.id = 'aula-'+si+'-'+ai;
       const bankQs = bankFor(si,ai);
       const theory = theoryPages(si,ai);
       const read = pagesReadFor(si,ai);
@@ -7044,9 +7077,31 @@ document.getElementById('metaDataAlvo').addEventListener('change', ()=>{
 });
 
 /* ===================== EDITAL =====================
-   Cada item do conteúdo programático (CURRICULO.editalItems) fica "coberto" quando TODAS as
-   aulas correlacionadas a ele já estão com studied=true. Progresso do item = fração de aulas
-   estudadas / total de aulas do item (permite ver progresso parcial antes de completar). */
+   Um item do conteúdo programático (CURRICULO.editalItems) fica "coberto" quando TODAS as
+   aulas correlacionadas a ele já estão com studied=true (mesmo critério usado no resumo
+   geral e na tela de Matérias). Só que "coberta" na teoria não é o mesmo que "dominada"
+   nas questões - por isso cada item mostra as DUAS visões lado a lado, sem misturar num
+   critério só: quantas das aulas tiveram a teoria concluída, e quanto % das questões dessas
+   aulas já estão dominadas. Dentro de cada bloco os itens pendentes vêm primeiro. */
+function irParaAula(si, ai){
+  document.querySelectorAll('.drawer-items button[data-view]').forEach(b=>b.classList.remove('active'));
+  const btnMaterias = document.querySelector('.drawer-items button[data-view="materias"]');
+  if(btnMaterias) btnMaterias.classList.add('active');
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  const viewMaterias = document.getElementById('view-materias');
+  if(viewMaterias) viewMaterias.classList.add('active');
+  updateHeaderForView('materias');
+  closeDrawer();
+  abrirMateria(si);
+  renderAll();
+  setTimeout(()=>{
+    const row = document.getElementById('aula-'+si+'-'+ai);
+    if(!row) return;
+    row.scrollIntoView({behavior:'smooth', block:'center'});
+    row.classList.add('flash');
+    setTimeout(()=> row.classList.remove('flash'), 1600);
+  }, 80);
+}
 function renderEdital(){
   const wrap = document.getElementById('editalList');
   if(!wrap) return;
@@ -7062,28 +7117,71 @@ function renderEdital(){
     if(!(it.bloco in blocoIdx)){ blocoIdx[it.bloco] = blocos.length; blocos.push({ nome:it.bloco, itens:[] }); }
     blocos[blocoIdx[it.bloco]].itens.push(it);
   });
+
   blocos.forEach(bloco=>{
     const card = document.createElement('div');
     card.className = 'card';
-    let bodyHtml = `<h2>${escapeHtml(bloco.nome)}</h2>`;
-    bloco.itens.forEach(it=>{
+
+    // Calcula os dados de cada item primeiro (precisa pra ordenar pendentes-primeiro
+    // e pra mostrar o % coberto do bloco no cabeçalho).
+    let blocoCobertos = 0;
+    const itensCalc = bloco.itens.map(it=>{
+      const teoriaTotal = it.aulas.length;
+      const teoriaFeitas = it.aulas.filter(([si,ai])=> getAula(si,ai).studied).length;
+      const coberto = teoriaTotal>0 && teoriaFeitas===teoriaTotal;
       totalItens++;
-      const estudadas = it.aulas.filter(([si,ai])=> getAula(si,ai).studied).length;
-      const total = it.aulas.length;
-      const coberto = total>0 && estudadas===total;
-      if(coberto) itensCobertos++;
-      const fracao = total>1 ? `<span style="color:var(--text-mut); font-size:.72rem;">(${estudadas}/${total} aulas)</span>` : '';
+      if(coberto){ itensCobertos++; blocoCobertos++; }
+
+      let questTotal = 0, questDominadas = 0;
+      it.aulas.forEach(([si,ai])=>{
+        bankFor(si,ai).forEach(q=>{
+          questTotal++;
+          const r = state.questions[q.id];
+          if(r && r.dominated) questDominadas++;
+        });
+      });
+      const questPct = questTotal>0 ? Math.round(questDominadas/questTotal*100) : null;
+      return { it, teoriaTotal, teoriaFeitas, coberto, questTotal, questDominadas, questPct };
+    });
+    // Pendentes primeiro; dentro do mesmo status, mantém a ordem original do edital.
+    itensCalc.sort((a,b)=> (a.coberto===b.coberto) ? 0 : (a.coberto? 1 : -1));
+
+    const blocoPct = bloco.itens.length ? Math.round(blocoCobertos/bloco.itens.length*100) : 0;
+    let bodyHtml = `<div class="edital-bloco-hd"><h2 style="margin:0;">${escapeHtml(bloco.nome)}</h2><div class="edital-bloco-pct">${blocoCobertos}/${bloco.itens.length} · ${blocoPct}%</div></div>`;
+
+    itensCalc.forEach(({it, teoriaTotal, teoriaFeitas, coberto, questTotal, questDominadas, questPct})=>{
+      const aulasHtml = it.aulas.map(([si,ai])=>{
+        const rec = getAula(si,ai);
+        const subjName = SUBJECTS[si] ? SUBJECTS[si].name : '?';
+        const aulaNm = SUBJECTS[si] ? SUBJECTS[si].aulas[ai] : '?';
+        return `<button type="button" class="edital-aula-link" data-si="${si}" data-ai="${ai}" title="${escapeHtml(subjName+': Aula '+aulaNm)}">
+          <span class="dot ${rec.studied?'on':''}"></span>${escapeHtml(subjName)} · Aula ${escapeHtml(aulaNm)}
+        </button>`;
+      }).join('');
+
+      const questHtml = questTotal>0
+        ? `<span class="edital-status"><span class="status-dot ${questPct===100?'done':''}"></span>Questões: <b>${questPct}%</b> dominadas (${questDominadas}/${questTotal})</span>`
+        : `<span class="edital-status">Sem questões extraídas pra esta parte ainda</span>`;
+
       bodyHtml += `
-        <div class="aula-top" style="margin-bottom:10px;">
-          <div class="chk ${coberto?'on':''}">${coberto?'<svg class=ic-svg aria-hidden=true><use href=#ic-check></use></svg>':''}</div>
-          <div class="aula-txt">
-            <div class="nm">${escapeHtml(it.item)} ${fracao}</div>
+        <div class="edital-item ${coberto?'coberto':''}">
+          <div class="edital-item-nm">${escapeHtml(it.item)}</div>
+          <div class="edital-aulas">${aulasHtml}</div>
+          <div class="edital-status-row">
+            <span class="edital-status"><span class="status-dot ${coberto?'done':''}"></span>Teoria: <b>${teoriaFeitas}/${teoriaTotal}</b> aulas concluídas</span>
+            ${questHtml}
           </div>
         </div>`;
     });
     card.innerHTML = bodyHtml;
+    card.querySelectorAll('.edital-aula-link').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        irParaAula(parseInt(btn.dataset.si,10), parseInt(btn.dataset.ai,10));
+      });
+    });
     wrap.appendChild(card);
   });
+
   const pct = totalItens>0 ? Math.round(itensCobertos/totalItens*100) : 0;
   const resumoTxt = document.getElementById('editalResumoTxt');
   const resumoBar = document.getElementById('editalResumoBar');
