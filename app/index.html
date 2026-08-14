@@ -1034,7 +1034,7 @@
   }
   .hamburger.in-drawer span{background:var(--text);}
   .hamburger.in-drawer:hover{background:color-mix(in srgb, var(--text) 14%, transparent);}
-  header.app h1, header.app .sub{padding-left:52px;}
+  header.app h1, header.app .sub, header.app .top-stats{padding-left:52px;}
 
   .drawer-backdrop{
     position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.42);
@@ -3855,11 +3855,16 @@ function segundaFeiraDe(dataStr){
   d.setDate(d.getDate()+diff);
   return d.toISOString().slice(0,10);
 }
+// Sobe esse numero sempre que a logica de geracao da semana (decomporMateriaEmItens,
+// distribuirComTeto, etc) mudar de um jeito que invalida semanas ja geradas - forca uma
+// regeneracao automatica (unica, sem botao) na proxima visita, mesmo sem virar a segunda.
+const CALENDARIO_ALGO_VERSION = 2;
 function ensureCalendarioDefaults(){
-  if(!state.calendario) state.calendario = { semanaRef:null, blocos:{}, diasPeso:null };
+  if(!state.calendario) state.calendario = { semanaRef:null, blocos:{}, diasPeso:null, algoVersion:null };
   const c = state.calendario;
   if(!c.diasPeso) c.diasPeso = { seg:1, ter:1, qua:1, qui:1, sex:1, sab:1, dom:1 };
   if(!c.blocos) c.blocos = {};
+  if(c.algoVersion===undefined) c.algoVersion = null;
   DIAS_SEMANA.forEach(d=>{ if(!Array.isArray(c.blocos[d])) c.blocos[d] = []; });
   return c;
 }
@@ -3929,7 +3934,7 @@ function distribuirComTeto(pesos, tetos, total){
 // 15min a partir de 30 pode ser escrito como soma de 30s e no máximo um 45, isso sempre fecha
 // o tempo exato, sem arredondar.
 function decomporMateriaEmItens(si, minutosTotal){
-  if(minutosTotal<=0) return [];
+  if(minutosTotal<30) return []; // sobra menor que um bloco (ex: 15min residual) - descarta, nao fabrica bloco de 45 a toa
   const temBloco45 = (minutosTotal%30)>0; // sobra 15min - um bloco de 30 vira 45 pra absorver
   let blocos30 = Math.floor(minutosTotal/30) - (temBloco45?1:0);
   const itens = [];
@@ -3971,8 +3976,9 @@ function intercalarItensPorMateria(itensPorMateria){
 function gerarSemanaCalendario(forcar){
   const c = ensureCalendarioDefaults();
   const segunda = segundaFeiraDe(todayStr());
-  if(!forcar && c.semanaRef===segunda) return; // ja gerada, nao sobrescreve arrastos manuais
+  if(!forcar && c.semanaRef===segunda && c.algoVersion===CALENDARIO_ALGO_VERSION) return; // ja gerada nesta versao do algoritmo, nao sobrescreve arrastos manuais
   c.semanaRef = segunda;
+  c.algoVersion = CALENDARIO_ALGO_VERSION;
   const cc = state.ciclo;
   if(!cc || !cc.horasPorSemana || cicloPesoTotal()<=0){
     DIAS_SEMANA.forEach(d=> c.blocos[d]=[]);
@@ -4058,7 +4064,7 @@ function gerarSemanaCalendario(forcar){
 function checkCalendarioRollover(){
   const c = ensureCalendarioDefaults();
   const segunda = segundaFeiraDe(todayStr());
-  if(c.semanaRef!==segunda) gerarSemanaCalendario();
+  if(c.semanaRef!==segunda || c.algoVersion!==CALENDARIO_ALGO_VERSION) gerarSemanaCalendario(true);
 }
 // Move um bloco de (fromDia,fromIdx) pra (toDia,toIdx) - usado pelo arrastar-e-soltar.
 function moveCalendarBlock(fromDia, fromIdx, toDia, toIdx){
