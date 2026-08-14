@@ -217,16 +217,11 @@
     display:flex; align-items:center; gap:.45em;
   }
   header.app h1 .ic-svg{color:var(--green); width:1.15em; height:1.15em;}
-  /* Sem transicao de font-size nem de max-height: as duas refluem o layout a cada
-     frame. O cabecalho compacto troca de estado, nao precisa animar a altura. */
+  /* Nome da aba atual: sempre visivel, junto com o nome do app, o resumo da aba (.sub)
+     e as 3 metricas (.top-stats) - o cabecalho e' o mesmo em todas as abas por padrao,
+     nao so no Painel. */
+  header.app .hdr-tab-name{color:var(--text); font-size:.8125rem; font-weight:700; margin-top:3px;}
   header.app .sub{color:var(--text-mut); font-size:.75rem; margin-top:1px; transition:opacity .15s ease;}
-  /* Cabecalho "compacto": usado em toda aba que nao seja o Painel. Vira uma
-     faixa fina so com o nome da aba - assim o cabecalho nao repete o mesmo
-     bloco grande em todo canto, e cada tela ganha uma identidade propria. */
-  body.header-compact header.app{ padding:calc(env(safe-area-inset-top,0px) + 12px) 20px 11px; border-radius:0; }
-  body.header-compact header.app h1{ font-size:.9375rem; }
-  body.header-compact header.app .sub{ font-size:.6875rem; }
-  body.header-compact .top-stats{ display:none; }
   /* Os dois KPI eram tiles preenchidos com blur — "card dentro de card" e vidro
      decorativo, os dois proibidos. Viram duas cifras numa linha, separadas por
      fio vertical, como cabecalho de tabela. E deixam de competir com o placar de
@@ -1034,7 +1029,7 @@
   }
   .hamburger.in-drawer span{background:var(--text);}
   .hamburger.in-drawer:hover{background:color-mix(in srgb, var(--text) 14%, transparent);}
-  header.app h1, header.app .sub, header.app .top-stats{padding-left:52px;}
+  header.app h1, header.app .hdr-tab-name, header.app .sub, header.app .top-stats{padding-left:52px;}
 
   .drawer-backdrop{
     position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.42);
@@ -1560,6 +1555,16 @@
     .widget-card.tamanho-terco{grid-column:span 3;}
     .widget-card.tamanho-dois-tercos{grid-column:1/-1;}
   }
+  /* Widget "Tempo estimado restante" no modo Todos (trio) - Consolidado/Teoria/Questoes lado a
+     lado no mesmo card, compartilhando o mesmo seletor de nivel/escopo do card. */
+  .widget-trio-row{display:flex; gap:16px; flex-wrap:wrap;}
+  .trio-bloco{flex:1 1 140px; min-width:120px; padding-right:16px; border-right:1px solid var(--widget-border, var(--border));}
+  .trio-bloco:last-child{border-right:none; padding-right:0;}
+  .trio-lbl{font-size:.7rem; font-weight:800; color:var(--widget-text-mut, var(--text-mut)); text-transform:uppercase; letter-spacing:.02em; margin-bottom:4px;}
+  @media(max-width:599px){
+    .trio-bloco{border-right:none; padding-right:0; border-bottom:1px solid var(--widget-border, var(--border)); padding-bottom:10px;}
+    .trio-bloco:last-child{border-bottom:none; padding-bottom:0;}
+  }
   /* Seletor de tamanho do widget: um botao so (mostra o tamanho atual) que abre um
      menuzinho com as 4 opcoes - em vez de 4 botoes sempre visiveis poluindo o card. */
   .widget-size{position:absolute; top:-8px; right:22px; z-index:6;}
@@ -1681,24 +1686,6 @@
   .ciclo-aviso-ajuste{background:var(--warn-bg); border:1px solid color-mix(in srgb, var(--yellow) 45%, transparent); border-radius:var(--radius); padding:12px 14px; margin-bottom:14px; font-size:.78rem; line-height:1.5; color:var(--text); position:relative;}
   .ciclo-aviso-ajuste .tit{font-weight:800; margin-bottom:4px; padding-right:24px;}
   .ciclo-aviso-fechar{position:absolute; top:8px; right:8px; width:22px; height:22px; border-radius:6px; border:none; background:transparent; color:var(--text-mut); font-size:.85rem;}
-  /* Mapa de calor semanal de estudo — grade dias/semanas (colunas) x matéria (linha),
-     intensidade só em tons do acento --acido (color-mix, sem paleta nova). Célula sem
-     estudo fica no --bg neutro, nitidamente diferente de qualquer nível estudado. */
-  .heatmap-grid{display:flex; flex-direction:column; gap:4px; overflow-x:auto; padding-bottom:2px;}
-  .heatmap-row{display:flex; align-items:center; gap:4px;}
-  .heatmap-row-lbl{flex:0 0 106px; font-size:.68rem; color:var(--text-mut); font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-  .heatmap-cells{display:flex; gap:3px;}
-  .heatmap-cell{width:20px; height:20px; border-radius:4px; background:var(--bg); border:1px solid var(--border); flex:none;}
-  .heatmap-cell.n1{background:color-mix(in srgb, var(--yellow) 28%, var(--card)); border-color:transparent;}
-  .heatmap-cell.n2{background:color-mix(in srgb, var(--yellow) 55%, var(--card)); border-color:transparent;}
-  .heatmap-cell.n3{background:color-mix(in srgb, var(--yellow) 80%, var(--card)); border-color:transparent;}
-  .heatmap-cell.n4{background:var(--yellow); border-color:transparent;}
-  .heatmap-cols-lbl{display:flex; gap:3px; margin-left:110px;}
-  .heatmap-col-lbl{width:20px; font-size:.56rem; color:var(--text-mut); text-align:center; flex:none;}
-  .heatmap-legend{display:flex; align-items:center; gap:5px; margin-top:10px; font-size:.68rem; color:var(--text-mut);}
-  .heatmap-legend .heatmap-cell{width:13px; height:13px;}
-  .heatmap-periodo-row{display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:12px;}
-  .heatmap-periodo-row select{padding:8px 10px; border-radius:8px; border:1px solid var(--border); font-size:.78rem; background:var(--bg); color:var(--text);}
   .ciclo-peso-row{display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); transition:opacity .15s;}
   .ciclo-peso-row:last-child{border-bottom:none;}
   .ciclo-peso-row.inativa{opacity:.45;}
@@ -1840,7 +1827,8 @@
     <i class="tab-badge" id="menuBadge" hidden></i>
   </button>
   <h1 id="appTitle"><svg class=ic-svg aria-hidden=true><use href=#ic-book></use></svg> Estudo Certo</h1>
-  <div class="sub">Acompanhamento de apostilas e questões</div>
+  <div class="hdr-tab-name" id="hdrTabName">Painel</div>
+  <div class="sub" id="appSub">Acompanhamento de apostilas e questões</div>
   <div class="top-stats">
     <div class="top-stat"><b id="hdrPct">0%</b><span>Páginas lidas</span></div>
     <div class="top-stat"><b id="hdrQPct">0%</b><span>Questões respondidas</span></div>
@@ -2090,9 +2078,7 @@
         <div class="cal-grid" id="calGrid"></div>
       </div>
       <div class="ciclo-actions">
-        <button class="btn ghost sm" id="btnCicloRecomecar"><svg class=ic-svg aria-hidden=true><use href=#ic-restart></use></svg> Recomeçar</button>
         <button class="btn ghost sm" id="btnCicloReplanejar"><svg class=ic-svg aria-hidden=true><use href=#ic-pencil></use></svg> Replanejar</button>
-        <button class="btn danger sm" id="btnCicloExcluir"><svg class=ic-svg aria-hidden=true><use href=#ic-trash></use></svg> Excluir</button>
       </div>
       <div class="ciclo-stats-row">
         <div class="card ciclo-stat kpi"><h2>Ciclos completos</h2><div class="ciclo-stat-big" id="cicloStatCompletos">0</div></div>
@@ -2116,23 +2102,89 @@
         <div id="cicloSequencia"></div>
       </details>
       <div class="card">
-        <h2 style="margin:0 0 12px;">Mapa de calor de estudo</h2>
-        <div class="heatmap-periodo-row">
-          <span style="font-size:.76rem; color:var(--text-mut);">Período</span>
-          <select id="cicloHeatmapPeriodo">
-            <option value="7d">Últimos 7 dias</option>
-            <option value="4s">Últimas 4 semanas</option>
-            <option value="ciclo">Ciclo atual</option>
-            <option value="tudo">Tudo</option>
-          </select>
-        </div>
-        <div id="cicloHeatmapWrap"></div>
-      </div>
-      <div class="card">
         <h2 style="margin:0 0 12px;">Histórico de ciclos</h2>
         <div id="cicloHistorico"></div>
       </div>
     </div>
+  </section>
+
+  <!-- AJUSTES: pagina normal como as outras, nao mais um overlay -->
+  <section class="view" id="view-ajustes">
+    <div class="card">
+      <h2>Aparência</h2>
+      <div class="theme-toggle">
+        <div class="theme-opt" id="themeOptLight" data-theme-val="light"><span class="ic"><svg class=ic-svg aria-hidden=true><use href=#ic-sun></use></svg></span>Claro</div>
+        <div class="theme-opt" id="themeOptDark" data-theme-val="dark"><span class="ic"><svg class=ic-svg aria-hidden=true><use href=#ic-moon></use></svg></span>Escuro</div>
+      </div>
+      <div class="settings-sub" style="margin-bottom:8px;">Cor de destaque</div>
+      <div class="accent-row" id="accentRow"></div>
+      <button class="btn ghost sm" id="btnReabrirOnboarding" style="margin-top:16px;"><svg class=ic-svg aria-hidden=true><use href=#ic-restart></use></svg> Refazer assistente de configuração inicial</button>
+    </div>
+    <div class="card" id="pomodoroCard">
+      <h2>Sessão de estudo</h2>
+      <div class="settings-sub" style="margin-top:0;">Tempo padrão de foco e intervalo ao iniciar uma sessão (modelo Pomodoro). Vale pra toda sessão nova; sessões já em andamento não mudam.</div>
+      <div class="form-row-2">
+        <div class="form-row"><label>Minutos de foco</label><input type="number" id="cfgPomodoroFocus" min="5" max="180" step="5"></div>
+        <div class="form-row"><label>Minutos de intervalo</label><input type="number" id="cfgPomodoroBreak" min="5" max="60" step="5"></div>
+      </div>
+    </div>
+    <div class="card" style="display:none;" id="installCard">
+      <h2>Instalar app</h2>
+      <div class="settings-sub" style="margin-top:0;">Instala o Estudo Certo neste dispositivo, como um app — abre em tela cheia, sem a barra do navegador.</div>
+      <button class="btn ghost sm" id="btnInstallApp"><svg class=ic-svg aria-hidden=true><use href=#ic-download></use></svg> Instalar</button>
+    </div>
+    <div class="card" id="helpMenuCard">
+      <button class="settings-menu-row" id="btnOpenHelp">
+        <span><svg class=ic-svg aria-hidden=true><use href=#ic-book></use></svg> Ajuda</span>
+        <span class="settings-menu-chev">›</span>
+      </button>
+      <div class="settings-sub" style="margin-top:6px;">Tutoriais rápidos e o manual de funcionalidades do app.</div>
+    </div>
+    <div class="card">
+      <h2>Dados</h2>
+      <div class="settings-sub">Seu progresso fica salvo neste dispositivo/navegador. Faça backup regularmente.</div>
+      <div class="data-btns">
+        <button class="btn ghost sm" id="btnExport"><svg class=ic-svg aria-hidden=true><use href=#ic-download></use></svg> Exportar backup</button>
+        <button class="btn ghost sm" id="btnImport"><svg class=ic-svg aria-hidden=true><use href=#ic-upload></use></svg> Importar backup</button>
+        <button class="btn danger sm" id="btnReset"><svg class=ic-svg aria-hidden=true><use href=#ic-trash></use></svg> Zerar progresso</button>
+      </div>
+      <input type="file" id="fileImport" accept="application/json" style="display:none;">
+    </div>
+    <div class="card" id="fsLocalCard">
+      <h2>Arquivo local</h2>
+      <div class="settings-sub" id="fsLocalStatus">Seu progresso é salvo automaticamente no navegador.</div>
+      <button class="btn ghost sm" id="btnFsLocalCheck" style="margin-top:8px;"><svg class=ic-svg aria-hidden=true><use href=#ic-sync></use></svg> Verificar espelho local (só instalação Windows)</button>
+    </div>
+    <div class="card" id="syncCard">
+      <h2>Sincronizar entre aparelhos</h2>
+      <div class="settings-sub" id="syncStatus">Progresso não sincronizado — este aparelho guarda seu próprio progresso, separado dos outros.</div>
+      <div class="settings-sub" style="margin-top:2px;">Contas são só por convite: o e-mail precisa estar autorizado antes de conseguir criar conta ou entrar.</div>
+      <div class="sync-login-row" id="syncLoginRow">
+        <input type="email" class="sync-input" id="syncEmail" placeholder="E-mail" autocomplete="off">
+        <input type="password" class="sync-input" id="syncPassword" placeholder="Senha" autocomplete="off">
+        <div class="data-btns">
+          <button class="btn sm" id="btnSyncSignIn"><svg class=ic-svg aria-hidden=true><use href=#ic-key></use></svg> Entrar</button>
+          <button class="btn ghost sm" id="btnSyncSignUp"><svg class=ic-svg aria-hidden=true><use href=#ic-user-plus></use></svg> Criar conta</button>
+        </div>
+      </div>
+      <button class="btn ghost sm sync-advanced-toggle" id="btnSyncAdvancedToggle"><svg class=ic-svg aria-hidden=true><use href=#ic-settings></use></svg> Configuração avançada</button>
+      <div class="sync-fields" id="syncFields" style="display:none;">
+        <input type="text" class="sync-input" id="syncUrl" placeholder="URL do projeto Supabase (https://xxxx.supabase.co)" autocomplete="off">
+        <input type="text" class="sync-input" id="syncKey" placeholder="Chave anon/public do Supabase" autocomplete="off">
+      </div>
+      <div class="data-btns">
+        <button class="btn ghost sm" id="btnSyncNow" style="display:none;"><svg class=ic-svg aria-hidden=true><use href=#ic-sync></use></svg> Sincronizar agora</button>
+        <button class="btn danger sm" id="btnSyncDisconnect" style="display:none;"><svg class=ic-svg aria-hidden=true><use href=#ic-logout></use></svg> Sair</button>
+      </div>
+    </div>
+    <div class="card" style="display:none;" id="updateCard">
+      <h2>Atualizações</h2>
+      <div class="settings-sub" id="updateStatus">—</div>
+      <div class="data-btns">
+        <button class="btn ghost sm" id="btnCheckUpdate"><svg class=ic-svg aria-hidden=true><use href=#ic-sync></use></svg> Verificar atualizações</button>
+      </div>
+    </div>
+    <div class="settings-app-info" id="appFooterInfo"><svg class=ic-svg aria-hidden=true><use href=#ic-book></use></svg> Estudo Certo · seus dados ficam só neste dispositivo</div>
   </section>
 
 </main>
@@ -2189,7 +2241,7 @@
   <button data-view="revisao"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2.5 20.5 6 17 9.5"/><path d="M3.5 11V9a3.5 3.5 0 0 1 3.5-3.5h13.5"/><path d="M7 21.5 3.5 18 7 14.5"/><path d="M20.5 13v2a3.5 3.5 0 0 1-3.5 3.5H3.5"/></svg><i class="tab-badge" id="revisaoBadge" hidden></i></span>Revisão</button>
   <button data-view="provas"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.2h8.2l4.3 4.3v13.3H6.5z"/><path d="M14.4 3.4v4.3h4.3"/><path d="M9.4 12.4h6.2M9.4 15.7h6.2"/></svg></span>Provas</button>
   <button data-view="metas"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="4.6"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/></svg></span>Metas</button>
-  <button type="button" id="btnSettingsTab"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 3.5v2.2M12 18.3v2.2M20.5 12h-2.2M5.7 12H3.5M17.7 6.3l-1.6 1.6M7.9 16.1l-1.6 1.6M17.7 17.7l-1.6-1.6M7.9 7.9 6.3 6.3"/></svg></span>Ajustes</button>
+  <button type="button" data-view="ajustes" id="btnSettingsTab"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 3.5v2.2M12 18.3v2.2M20.5 12h-2.2M5.7 12H3.5M17.7 6.3l-1.6 1.6M7.9 16.1l-1.6 1.6M17.7 17.7l-1.6-1.6M7.9 7.9 6.3 6.3"/></svg></span>Ajustes</button>
   </div>
 </nav>
 
@@ -2283,93 +2335,6 @@
       <div class="quiz-title"></div>
     </div>
     <div class="quiz-body" id="replanCicloBody"></div>
-  </div>
-</div>
-
-<div class="quiz-overlay" id="settingsOverlay">
-  <div class="quiz-modal" style="height:auto; max-height:88vh;">
-    <div class="quiz-header">
-      <button class="quiz-close" id="settingsClose"><svg class=ic-svg aria-hidden=true><use href=#ic-close></use></svg></button>
-      <div class="quiz-progress">Configurações</div>
-      <div class="quiz-title"></div>
-    </div>
-    <div class="quiz-body">
-      <div class="card" style="box-shadow:none; border:none; padding:0; margin-bottom:18px;">
-        <h2>Aparência</h2>
-        <div class="theme-toggle">
-          <div class="theme-opt" id="themeOptLight" data-theme-val="light"><span class="ic"><svg class=ic-svg aria-hidden=true><use href=#ic-sun></use></svg></span>Claro</div>
-          <div class="theme-opt" id="themeOptDark" data-theme-val="dark"><span class="ic"><svg class=ic-svg aria-hidden=true><use href=#ic-moon></use></svg></span>Escuro</div>
-        </div>
-        <div class="settings-sub" style="margin-bottom:8px;">Cor de destaque</div>
-        <div class="accent-row" id="accentRow"></div>
-        <button class="btn ghost sm" id="btnReabrirOnboarding" style="margin-top:16px;"><svg class=ic-svg aria-hidden=true><use href=#ic-restart></use></svg> Refazer assistente de configuração inicial</button>
-      </div>
-      <div class="card" style="box-shadow:none; border:none; padding:0; margin-bottom:18px;" id="pomodoroCard">
-        <h2>Sessão de estudo</h2>
-        <div class="settings-sub" style="margin-top:0;">Tempo padrão de foco e intervalo ao iniciar uma sessão (modelo Pomodoro). Vale pra toda sessão nova; sessões já em andamento não mudam.</div>
-        <div class="form-row-2">
-          <div class="form-row"><label>Minutos de foco</label><input type="number" id="cfgPomodoroFocus" min="5" max="180" step="5"></div>
-          <div class="form-row"><label>Minutos de intervalo</label><input type="number" id="cfgPomodoroBreak" min="5" max="60" step="5"></div>
-        </div>
-      </div>
-      <div class="card" style="box-shadow:none; border:none; padding:0; margin-bottom:18px; display:none;" id="installCard">
-        <h2>Instalar app</h2>
-        <div class="settings-sub" style="margin-top:0;">Instala o Estudo Certo neste dispositivo, como um app — abre em tela cheia, sem a barra do navegador.</div>
-        <button class="btn ghost sm" id="btnInstallApp"><svg class=ic-svg aria-hidden=true><use href=#ic-download></use></svg> Instalar</button>
-      </div>
-      <div class="card" style="box-shadow:none; border:none; padding:0; margin-bottom:18px;" id="helpMenuCard">
-        <button class="settings-menu-row" id="btnOpenHelp">
-          <span><svg class=ic-svg aria-hidden=true><use href=#ic-book></use></svg> Ajuda</span>
-          <span class="settings-menu-chev">›</span>
-        </button>
-        <div class="settings-sub" style="margin-top:6px;">Tutoriais rápidos e o manual de funcionalidades do app.</div>
-      </div>
-      <div class="card" style="box-shadow:none; border:none; padding:0;">
-        <h2>Dados</h2>
-        <div class="settings-sub">Seu progresso fica salvo neste dispositivo/navegador. Faça backup regularmente.</div>
-        <div class="data-btns">
-          <button class="btn ghost sm" id="btnExport"><svg class=ic-svg aria-hidden=true><use href=#ic-download></use></svg> Exportar backup</button>
-          <button class="btn ghost sm" id="btnImport"><svg class=ic-svg aria-hidden=true><use href=#ic-upload></use></svg> Importar backup</button>
-          <button class="btn danger sm" id="btnReset"><svg class=ic-svg aria-hidden=true><use href=#ic-trash></use></svg> Zerar progresso</button>
-        </div>
-        <input type="file" id="fileImport" accept="application/json" style="display:none;">
-      </div>
-      <div class="card" style="box-shadow:none; border:none; padding:0; margin-top:18px;" id="fsLocalCard">
-        <h2>Arquivo local</h2>
-        <div class="settings-sub" id="fsLocalStatus">Seu progresso é salvo automaticamente no navegador.</div>
-        <button class="btn ghost sm" id="btnFsLocalCheck" style="margin-top:8px;"><svg class=ic-svg aria-hidden=true><use href=#ic-sync></use></svg> Verificar espelho local (só instalação Windows)</button>
-      </div>
-      <div class="card" style="box-shadow:none; border:none; padding:0; margin-top:18px;" id="syncCard">
-        <h2>Sincronizar entre aparelhos</h2>
-        <div class="settings-sub" id="syncStatus">Progresso não sincronizado — este aparelho guarda seu próprio progresso, separado dos outros.</div>
-        <div class="settings-sub" style="margin-top:2px;">Contas são só por convite: o e-mail precisa estar autorizado antes de conseguir criar conta ou entrar.</div>
-        <div class="sync-login-row" id="syncLoginRow">
-          <input type="email" class="sync-input" id="syncEmail" placeholder="E-mail" autocomplete="off">
-          <input type="password" class="sync-input" id="syncPassword" placeholder="Senha" autocomplete="off">
-          <div class="data-btns">
-            <button class="btn sm" id="btnSyncSignIn"><svg class=ic-svg aria-hidden=true><use href=#ic-key></use></svg> Entrar</button>
-            <button class="btn ghost sm" id="btnSyncSignUp"><svg class=ic-svg aria-hidden=true><use href=#ic-user-plus></use></svg> Criar conta</button>
-          </div>
-        </div>
-        <button class="btn ghost sm sync-advanced-toggle" id="btnSyncAdvancedToggle"><svg class=ic-svg aria-hidden=true><use href=#ic-settings></use></svg> Configuração avançada</button>
-        <div class="sync-fields" id="syncFields" style="display:none;">
-          <input type="text" class="sync-input" id="syncUrl" placeholder="URL do projeto Supabase (https://xxxx.supabase.co)" autocomplete="off">
-          <input type="text" class="sync-input" id="syncKey" placeholder="Chave anon/public do Supabase" autocomplete="off">
-        </div>
-        <div class="data-btns">
-          <button class="btn ghost sm" id="btnSyncNow" style="display:none;"><svg class=ic-svg aria-hidden=true><use href=#ic-sync></use></svg> Sincronizar agora</button>
-          <button class="btn danger sm" id="btnSyncDisconnect" style="display:none;"><svg class=ic-svg aria-hidden=true><use href=#ic-logout></use></svg> Sair</button>
-        </div>
-      </div>
-      <div class="card" style="box-shadow:none; border:none; padding:0; margin-top:18px; display:none;" id="updateCard">
-        <h2>Atualizações</h2>
-        <div class="settings-sub" id="updateStatus">—</div>
-        <div class="data-btns">
-          <button class="btn ghost sm" id="btnCheckUpdate"><svg class=ic-svg aria-hidden=true><use href=#ic-sync></use></svg> Verificar atualizações</button>
-        </div>
-      </div>
-      <div class="settings-app-info" id="appFooterInfo"><svg class=ic-svg aria-hidden=true><use href=#ic-book></use></svg> Estudo Certo · seus dados ficam só neste dispositivo</div>
-    </div>
   </div>
 </div>
 
@@ -4153,9 +4118,9 @@ const METRICS_CATALOG = [
     niveis:['global','materia','apostila'], tamanho:'pequeno',
     tooltip:'Tempo médio que você leva para ler uma página (Leitura) ou para responder uma questão (Resolução), calculado a partir do seu histórico. É a base usada para estimar o tempo restante. No próprio widget você escolhe Leitura ou Resolução, e o nível — Geral, Por matéria ou Por apostila.' },
   { id:'tempo_restante', categoria:'Estimativas', titulo:'Tempo estimado restante',
-    modos:[{id:'teoria',label:'Teoria'},{id:'questoes',label:'Questões'},{id:'consolidado',label:'Consolidado'}],
+    modos:[{id:'teoria',label:'Teoria'},{id:'questoes',label:'Questões'},{id:'consolidado',label:'Consolidado'},{id:'trio',label:'Todos'}],
     niveis:['global','materia','apostila','lista'], tamanho:'pequeno',
-    tooltip:'Projeção de quanto tempo ainda falta, no seu ritmo atual, com base no que falta ler/responder. Escolha Teoria, Questões ou Consolidado, e o nível — Geral, Por matéria, Por apostila, ou Todas as matérias ao mesmo tempo (uma lista comparando cada uma). É uma estimativa que se ajusta conforme seu ritmo muda, não um prazo fixo.' },
+    tooltip:'Projeção de quanto tempo ainda falta, no seu ritmo atual, com base no que falta ler/responder. Escolha Teoria, Questões, Consolidado, ou Todos (mostra os três lado a lado no mesmo card), e o nível — Geral, Por matéria, Por apostila, ou Todas as matérias ao mesmo tempo (uma lista comparando cada uma). É uma estimativa que se ajusta conforme seu ritmo muda, não um prazo fixo.' },
 
   { id:'distribuicao_tempo', categoria:'Analíticas', titulo:'Distribuição % do tempo entre matérias', niveis:['global'], tamanho:'grande',
     tooltip:'Mostra que fatia do seu tempo total de estudo (teoria + questões) está indo para cada matéria. Ajuda a identificar se você está investindo tempo demais em matérias de pouco peso no edital, ou de menos nas de peso alto — principalmente se você cadastrar o peso de cada uma.' },
@@ -4338,7 +4303,7 @@ function renderSettingsControls(){
     if(document.activeElement!==focusInput) focusInput.value = cfg.focusMin;
     if(document.activeElement!==breakInput) breakInput.value = cfg.breakMin;
   }
-  wireTooltips(document.getElementById('settingsOverlay'));
+  wireTooltips(document.getElementById('view-ajustes'));
 }
 // Card "Favoritos" mora na aba Questões (não mais em Ajustes) - função própria porque
 // precisa ser chamada sempre que a aba Questões renderiza, não só quando Ajustes abre.
@@ -4394,11 +4359,6 @@ document.getElementById('cfgPomodoroBreak').addEventListener('change', (e)=>{
   renderSettingsControls();
 });
 
-document.getElementById('btnSettingsTab').addEventListener('click', ()=>{
-  renderSettingsControls();
-  document.getElementById('settingsOverlay').classList.add('show');
-});
-document.getElementById('settingsClose').addEventListener('click', ()=> document.getElementById('settingsOverlay').classList.remove('show'));
 document.getElementById('btnOpenHelp').addEventListener('click', ()=>{
   renderHelpControls();
   document.getElementById('helpOverlay').classList.add('show');
@@ -4407,7 +4367,6 @@ document.getElementById('helpClose').addEventListener('click', ()=> document.get
 document.getElementById('btnRefazerFavoritas').addEventListener('click', ()=>{
   const favs = allFavoriteQuestions();
   if(favs.length===0){ toast('Nenhuma questão favoritada ainda '); return; }
-  document.getElementById('settingsOverlay').classList.remove('show');
   startQuiz(favs, 'Favoritos');
 });
 
@@ -4556,8 +4515,12 @@ function onbBodyConclusao(){
 // fim do assistente (feedback: sem conta, progresso desta versão web fica preso a um
 // navegador só). Não duplica o formulário de login, só leva até ele.
 function openSettingsSyncSection(){
-  renderSettingsControls();
-  document.getElementById('settingsOverlay').classList.add('show');
+  document.querySelectorAll('.drawer-items button[data-view]').forEach(b=>b.classList.remove('active'));
+  document.querySelector('.drawer-items button[data-view="ajustes"]').classList.add('active');
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-ajustes').classList.add('active');
+  updateHeaderForView('ajustes');
+  renderAll();
   const card = document.getElementById('syncCard');
   if(card) setTimeout(()=> card.scrollIntoView({behavior:'smooth', block:'start'}), 50);
 }
@@ -4608,7 +4571,7 @@ function syncOnbTrajetoriaUi(){
     syncOnbTrajetoriaUi();
   });
 }
-// setTheme/setAccent já re-renderizam o painel de Ajustes (settingsOverlay), mas não os
+// setTheme/setAccent já re-renderizam a pagina de Ajustes, mas não os
 // controles equivalentes aqui dentro do assistente - então sincroniza os dois manualmente.
 function syncOnbAparenciaUi(){
   document.getElementById('onbBody').innerHTML = onbBodyAparencia();
@@ -4682,7 +4645,6 @@ document.getElementById('onbSkipBtn').addEventListener('click', ()=>{
   document.getElementById('onbOverlay').classList.remove('show');
 });
 document.getElementById('btnReabrirOnboarding').addEventListener('click', ()=>{
-  document.getElementById('settingsOverlay').classList.remove('show');
   openOnboarding();
 });
 // Mostra o assistente sozinho só na primeira vez (nunca mais, depois de concluído ou pulado
@@ -4692,11 +4654,11 @@ function maybeShowOnboarding(){
 }
 
 /* ===================== NAV ===================== */
-// O cabeçalho grande (com estatísticas) só faz sentido no Painel, que é a tela
-// de "visão geral". Nas outras abas ele vira uma faixa fina e mostra o nome
-// da própria aba (não o nome do app repetido) - assim cada tela tem uma
-// identidade visual e deixa de ser um cabeçalho idêntico o tempo todo.
+// O cabeçalho e' o mesmo em qualquer aba, por padrao: nome do app (h1, fixo - ver
+// aplicarMarca), nome da aba atual (.hdr-tab-name), o resumo do que ha nela (.sub) e as
+// 3 metricas gerais (.top-stats, sempre visiveis). So o nome/resumo trocam por aba.
 const VIEW_TITLES = {
+  painel:       { label:'Painel', desc:'Acompanhamento de apostilas e questões.' },
   materias:     { label:'Matérias', desc:'Suas apostilas, aula por aula, com o progresso de leitura de cada uma.' },
   questoes:     { label:'Questões', desc:'Pratique por matéria, por apostila ou todas as questões juntas.' },
   tempo:        { label:'Tempo de estudo', desc:'Quanto tempo você já dedicou a teoria e questões, por matéria e no total.' },
@@ -4704,29 +4666,17 @@ const VIEW_TITLES = {
   refazer:      { label:'Questões para refazer', desc:'Questões que você errou e ainda não dominou - vale a pena revisar.' },
   revisao:      { label:'Revisão espaçada', desc:'Aulas com revisão programada pra hoje, no intervalo certo pra fixar.' },
   metas:        { label:'Metas', desc:'Sua sequência de dias estudados e a meta diária de páginas.' },
+  ajustes:      { label:'Ajustes', desc:'Aparência, sessão de estudo, dados, sincronização e ajuda.' },
 };
-// Guarda o subtitulo original do Painel (definido no HTML) uma unica vez, pra poder
-// restaura-lo depois de mostrar a descricao de outra aba no mesmo elemento .sub.
-const PAINEL_SUB_TEXT = document.querySelector('header.app .sub').textContent;
 function updateHeaderForView(viewName){
-  const appTitleEl = document.getElementById('appTitle');
-  const subEl = document.querySelector('header.app .sub');
-  if(!appTitleEl) return;
-  if(viewName === 'painel' || !VIEW_TITLES[viewName]){
-    document.body.classList.remove('header-compact');
-    appTitleEl.innerHTML = window.APP_BRAND_HTML || appTitleEl.innerHTML;
-    if(subEl) subEl.textContent = PAINEL_SUB_TEXT;
-  } else {
-    document.body.classList.add('header-compact');
-    const v = VIEW_TITLES[viewName];
-    setRotulo(appTitleEl, v.label);
-    if(subEl) subEl.textContent = v.desc;
-  }
+  const tabNameEl = document.getElementById('hdrTabName');
+  const subEl = document.getElementById('appSub');
+  const v = VIEW_TITLES[viewName] || VIEW_TITLES.painel;
+  if(tabNameEl) tabNameEl.textContent = v.label;
+  if(subEl) subEl.textContent = v.desc;
 }
-// So os botoes com data-view sao abas de verdade (trocam de tela). O botao de
-// Ajustes fica dentro da mesma barra por conveniencia de alcance no polegar, mas
-// abre um overlay por cima da tela atual - nao participa da logica de troca de
-// aba nem fica marcado como "ativo" (tem seu proprio listener, ver acima).
+// Ajustes e' uma aba igual as outras (data-view="ajustes") - troca de tela pelo mesmo
+// mecanismo, sem overlay proprio.
 document.querySelectorAll('.drawer-items button[data-view]').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     document.querySelectorAll('.drawer-items button[data-view]').forEach(b=>b.classList.remove('active'));
@@ -4771,7 +4721,6 @@ document.getElementById('btnMenu').addEventListener('click', (e)=>{ e.stopPropag
 document.getElementById('btnMenuClose').addEventListener('click', closeDrawer);
 document.getElementById('drawerBackdrop').addEventListener('click', closeDrawer);
 document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && drawerAberto) closeDrawer(); });
-document.getElementById('btnSettingsTab').addEventListener('click', closeDrawer);
 // Fecha qualquer menu de tamanho de widget aberto ao clicar fora dele.
 document.addEventListener('click', ()=> document.querySelectorAll('.widget-size-menu.show').forEach(m=> m.classList.remove('show')));
 
@@ -4963,28 +4912,36 @@ function migrateDashboardWidgets(dash){
 // "Geral", pra dar a visao completa de cara sem precisar trocar o seletor toda hora. Isso so
 // roda UMA vez por dashboard ja existente (dash._tempoRestanteTrioV1) pra nao reverter se o
 // usuario decidir remover ou reconfigurar algum desses widgets depois.
+// v1 (ago/2026): garantia de que existiam os 3 widgets separados "Geral" de tempo_restante.
+// v2 (ago/2026, logo em seguida): os 3 viraram UM widget so, modo 'trio' — Consolidado/Teoria/
+// Questoes lado a lado no mesmo card (ver buildTempoRestanteTrioHtml). Roda uma vez por
+// dashboard ja existente; nao mexe se o usuario ja tiver reconfigurado esses widgets depois.
 function ensureTempoRestanteTrio(dash){
-  if(dash._tempoRestanteTrioV1) return;
-  dash._tempoRestanteTrioV1 = true;
+  if(dash._tempoRestanteTrioV2) return;
+  dash._tempoRestanteTrioV2 = true;
   const modos = ['consolidado','teoria','questoes'];
-  const existentes = {};
+  const achados = {};
   dash.widgets.forEach(w=>{
-    if(w.metricId==='tempo_restante' && !w.scope && modos.includes(w.modo) && !existentes[w.modo]) existentes[w.modo] = w;
+    if(w.metricId==='tempo_restante' && !w.scope && modos.includes(w.modo) && !achados[w.modo]) achados[w.modo] = w;
   });
-  let ancoraOrdem = null;
-  modos.forEach(m=>{ if(existentes[m] && (ancoraOrdem===null || existentes[m].ordem<ancoraOrdem)) ancoraOrdem = existentes[m].ordem; });
-  if(ancoraOrdem===null){
-    const ordens = dash.widgets.map(w=>w.ordem||0);
-    ancoraOrdem = ordens.length? Math.min(...ordens) : 1;
+  const jaTemTrio = dash.widgets.some(w=> w.metricId==='tempo_restante' && w.modo==='trio');
+  const encontrados = modos.filter(m=>achados[m]);
+  if(jaTemTrio && encontrados.length===0) return; // ja migrado ou usuario configurou manualmente
+  let ordemBase, tamanhoBase;
+  if(encontrados.length){
+    ordemBase = Math.min(...encontrados.map(m=>achados[m].ordem||0));
+    tamanhoBase = achados[encontrados[0]].tamanho || 'cheio';
+    const idsRemover = new Set(encontrados.map(m=>achados[m].id));
+    dash.widgets = dash.widgets.filter(w=>!idsRemover.has(w.id));
+  } else if(!jaTemTrio){
+    // dashboard sem nenhuma variante de tempo_restante-Geral ainda (personalizado de outro
+    // jeito) - nao adiciona nada, so garante que futuras adicoes usem o modo 'trio' (ja e o
+    // default do catalogo).
+    return;
+  } else {
+    return;
   }
-  modos.forEach((m,i)=>{
-    if(!existentes[m]){
-      const novo = { id: uid(), metricId:'tempo_restante', modo:m, periodo:null, scope:null, visivel:true, ordem: ancoraOrdem+i*0.01, tamanho:'cheio' };
-      dash.widgets.push(novo);
-      existentes[m] = novo;
-    }
-  });
-  modos.forEach((m,i)=>{ existentes[m].ordem = ancoraOrdem + i*0.01; });
+  dash.widgets.push({ id: uid(), metricId:'tempo_restante', modo:'trio', periodo:null, scope:null, visivel:true, ordem:ordemBase, tamanho:tamanhoBase });
   dash.widgets.sort((a,b)=>(a.ordem||0)-(b.ordem||0)).forEach((w,i)=>{ w.ordem = i+1; });
   save();
 }
@@ -4996,9 +4953,7 @@ function ensureTempoRestanteTrio(dash){
 function ensureDashboard(){
   if(!state.dashboard){
     state.dashboard = { widgets: [
-      { id: uid(), metricId:'tempo_restante', modo:'consolidado', periodo:null, scope:null, visivel:true, ordem:1, tamanho:'cheio' },
-      { id: uid(), metricId:'tempo_restante', modo:'teoria', periodo:null, scope:null, visivel:true, ordem:2, tamanho:'cheio' },
-      { id: uid(), metricId:'tempo_restante', modo:'questoes', periodo:null, scope:null, visivel:true, ordem:3, tamanho:'cheio' },
+      { id: uid(), metricId:'tempo_restante', modo:'trio', periodo:null, scope:null, visivel:true, ordem:1, tamanho:'cheio' },
       { id: uid(), metricId:'taxa_dominio', modo:null, scope:null, visivel:true, ordem:4 },
       { id: uid(), metricId:'tempo_total', modo:'consolidado', periodo:'total', scope:null, visivel:true, ordem:5 },
       { id: uid(), metricId:'consistencia', modo:null, scope:null, visivel:true, ordem:6 },
@@ -5257,6 +5212,17 @@ function buildTempoTotalListaHtml(modo, periodo){
     return { name:s.name, tempo: tempoTotalMateriaPorModo(si, modo, sessions)||0 };
   }).filter(r=>r.tempo>0).sort((a,b)=>b.tempo-a.tempo);
   return buildTempoListaHtml(rows, 'Nenhuma sessão de estudo registrada nesse período ainda.');
+}
+// Renderiza os 3 modos de tempo_restante (Consolidado, Teoria, Questões — nessa ordem) lado a
+// lado dentro do MESMO card, todos compartilhando o mesmo nivel/escopo escolhido no seletor
+// unico do widget (ver modo 'trio' em buildWidgetControlsHtml/renderPainel).
+function buildTempoRestanteTrioHtml(nivel, scopeParam){
+  const ORDEM_TRIO = [ {modo:'consolidado', label:'Consolidado'}, {modo:'teoria', label:'Teoria'}, {modo:'questoes', label:'Questões'} ];
+  const blocos = ORDEM_TRIO.map(o=>{
+    const {value, sub} = computeWidgetValue('tempo_restante', o.modo, nivel, scopeParam);
+    return `<div class="trio-bloco"><div class="trio-lbl">${o.label}</div><div class="widget-value">${value}</div><div class="widget-sub">${sub||''}</div></div>`;
+  }).join('');
+  return `<div class="widget-trio-row">${blocos}</div>`;
 }
 function buildTempoRestanteListaHtml(modo){
   const rows = SUBJECTS.filter((s,si)=>isSubjectActive(si)).map((s)=>{
@@ -5616,7 +5582,12 @@ function renderPainel(){
           break;
         case 'tempo_restante':
           isSimpleValue = (nivel!=='lista');
-          bodyHtml = (nivel==='lista') ? buildTempoRestanteListaHtml(w.modo) : (()=>{ const {value,sub}=computeWidgetValue(w.metricId,w.modo,nivel,scopeParam); return `<div class="widget-value">${value}</div><div class="widget-sub">${sub||''}</div>`; })();
+          if(w.modo==='trio' && nivel!=='lista'){
+            bodyHtml = buildTempoRestanteTrioHtml(nivel, scopeParam);
+          } else {
+            const modoEfetivo = (w.modo==='trio')? 'consolidado' : w.modo; // trio+lista nao existe combinado - cai pro consolidado
+            bodyHtml = (nivel==='lista') ? buildTempoRestanteListaHtml(modoEfetivo) : (()=>{ const {value,sub}=computeWidgetValue(w.metricId,w.modo,nivel,scopeParam); return `<div class="widget-value">${value}</div><div class="widget-sub">${sub||''}</div>`; })();
+          }
           break;
         case 'aulas_estudadas': {
           const t = computeTotals();
@@ -8770,89 +8741,6 @@ function renderCicloHistorico(){
     });
   });
 }
-// Intervalo e granularidade de agrupamento (dia/semana) do mapa de calor, a partir do
-// período escolhido no seletor (ver renderCicloHeatmap). Períodos longos agrupam por
-// semana pra não estourar a grade horizontalmente.
-function heatmapPeriodoRange(periodo){
-  const now = Date.now();
-  const DIA = 86400000;
-  if(periodo==='7d') return { inicio: now-6*DIA, fim: now, agrupar:'dia' };
-  if(periodo==='4s') return { inicio: now-27*DIA, fim: now, agrupar:'semana' };
-  if(periodo==='ciclo'){
-    const c = state.ciclo;
-    const inicio = c ? c.cicloStartedAt : now-6*DIA;
-    const dias = Math.max(1, Math.ceil((now-inicio)/DIA));
-    return { inicio, fim: now, agrupar: dias>35 ? 'semana' : 'dia' };
-  }
-  // 'tudo': do inicio da primeira sessao registrada ate agora.
-  const primeira = state.sessions.length ? state.sessions.reduce((m,s)=>Math.min(m, s.timestampInicio||s.timestampFim), now) : now-6*DIA;
-  const dias = Math.max(1, Math.ceil((now-primeira)/DIA));
-  return { inicio: primeira, fim: now, agrupar: dias>35 ? 'semana' : 'dia' };
-}
-function heatmapColunas(range){
-  const DIA = 86400000;
-  const cols = [];
-  if(range.agrupar==='dia'){
-    let d = new Date(range.inicio); d.setHours(0,0,0,0);
-    const fimD = new Date(range.fim); fimD.setHours(0,0,0,0);
-    while(d.getTime()<=fimD.getTime()){
-      cols.push({ label: d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}), ini: d.getTime(), fim: d.getTime()+DIA });
-      d = new Date(d.getTime()+DIA);
-    }
-  } else {
-    let d = new Date(range.inicio); d.setHours(0,0,0,0);
-    const dow = (d.getDay()+6)%7; // 0 = segunda-feira
-    d = new Date(d.getTime()-dow*DIA); // volta pro inicio (segunda) da semana do periodo
-    const fimD = new Date(range.fim);
-    while(d.getTime()<=fimD.getTime()){
-      const fimSemana = d.getTime()+7*DIA;
-      cols.push({ label: d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}), ini: d.getTime(), fim: fimSemana });
-      d = new Date(fimSemana);
-    }
-  }
-  return cols;
-}
-// Grade dias/semanas (colunas) x matéria (linha) — célula = tempo estudado somado das sessões
-// registradas (state.sessions, mesma fonte da aba Tempo). Só matérias ativas no ciclo entram.
-function heatmapDados(periodo){
-  const range = heatmapPeriodoRange(periodo);
-  const cols = heatmapColunas(range);
-  let max = 0;
-  const linhas = SUBJECTS.map((s,si)=>si).filter(isSubjectActive).map(si=>{
-    const valores = cols.map(col=>{
-      const seg = sumTempo(state.sessions.filter(sx=> sx.materiaIdx===si && sx.timestampFim>=col.ini && sx.timestampFim<col.fim));
-      if(seg>max) max = seg;
-      return seg;
-    });
-    return { si, nome: SUBJECTS[si].name, valores };
-  });
-  return { cols, linhas, max };
-}
-function renderCicloHeatmap(){
-  const sel = document.getElementById('cicloHeatmapPeriodo');
-  const wrap = document.getElementById('cicloHeatmapWrap');
-  if(!sel || !wrap) return;
-  if(state.sessions.length===0){
-    wrap.innerHTML = `<div class="empty">Registre sessões de estudo (cronômetro ou lançamento manual) para ver o mapa de calor.</div>`;
-    return;
-  }
-  const { cols, linhas, max } = heatmapDados(sel.value||'7d');
-  if(linhas.length===0){
-    wrap.innerHTML = `<div class="empty">Nenhuma matéria ativa no ciclo.</div>`;
-    return;
-  }
-  const colsLbl = cols.map(c=>`<div class="heatmap-col-lbl">${c.label}</div>`).join('');
-  const rows = linhas.map(l=>{
-    const cells = l.valores.map((seg,i)=>{
-      const nivel = seg<=0 ? 0 : (max>0 && seg/max>0.75 ? 4 : (max>0 && seg/max>0.5 ? 3 : (max>0 && seg/max>0.25 ? 2 : 1)));
-      const titulo = escapeHtml(l.nome)+' · '+cols[i].label+': '+(seg>0? fmtDuracao(seg) : 'sem estudo');
-      return `<div class="heatmap-cell${nivel? ' n'+nivel : ''}" title="${titulo}"></div>`;
-    }).join('');
-    return `<div class="heatmap-row"><div class="heatmap-row-lbl" title="${escapeHtml(l.nome)}">${escapeHtml(l.nome)}</div><div class="heatmap-cells">${cells}</div></div>`;
-  }).join('');
-  wrap.innerHTML = `<div class="heatmap-grid">${rows}</div><div class="heatmap-cols-lbl">${colsLbl}</div>
-    <div class="heatmap-legend"><span>menos</span><div class="heatmap-cell"></div><div class="heatmap-cell n1"></div><div class="heatmap-cell n2"></div><div class="heatmap-cell n3"></div><div class="heatmap-cell n4"></div><span>mais</span></div>`;
-}
 function renderPlanejamento(){
   const setupEl = document.getElementById('cicloSetup');
   const mainEl = document.getElementById('cicloMain');
@@ -8876,12 +8764,9 @@ function renderPlanejamento(){
   document.getElementById('cicloDonutWrap').innerHTML = buildCicloDonutHtml(fmtHorasMin(metaTotal));
   document.getElementById('cicloLegend').innerHTML = c.ordem.filter(si=>getCicloPeso(si)>0).map(si=>`<i style="background:${subjectColor(si)}" title="${SUBJECTS[si].name}"></i>`).join('');
 
-  document.getElementById('btnCicloRecomecar').disabled = (estudadoTotal===0);
-
   renderCicloSequencia();
   renderCicloAvisoAjuste();
   renderCicloHistorico();
-  renderCicloHeatmap();
   renderCalendario();
 }
 document.getElementById('btnCriarCiclo').addEventListener('click', ()=>{
@@ -8891,26 +8776,12 @@ document.getElementById('btnCriarCiclo').addEventListener('click', ()=>{
   toast('Ciclo criado! Confira os pesos sugeridos e as matérias incluídas.');
   openReplanCicloModal();
 });
-document.getElementById('btnCicloRecomecar').addEventListener('click', ()=>{
-  if(document.getElementById('btnCicloRecomecar').disabled) return;
-  if(confirm('Isso zera o progresso do ciclo atual, sem contar como ciclo completo. Continuar?')){
-    recomecarCiclo();
-    renderPlanejamento();
-  }
-});
-document.getElementById('btnCicloExcluir').addEventListener('click', ()=>{
-  if(confirm('Isso exclui a configuração do ciclo (horas, pesos e sequência) e zera "Ciclos completos". O histórico de sessões de estudo não é apagado. Continuar?')){
-    excluirCiclo();
-    renderPlanejamento();
-  }
-});
 document.getElementById('btnCicloEditSeq').addEventListener('click', ()=>{
   cicloEditMode = !cicloEditMode;
   document.getElementById('btnCicloEditSeq').innerHTML = cicloEditMode? '<svg class=ic-svg aria-hidden=true><use href=#ic-check></use></svg>' : '<svg class=ic-svg aria-hidden=true><use href=#ic-pencil></use></svg>';
   renderCicloSequencia();
 });
 document.getElementById('cicloMostrarFinalizados').addEventListener('change', renderCicloSequencia);
-document.getElementById('cicloHeatmapPeriodo').addEventListener('change', renderCicloHeatmap);
 document.getElementById('btnCicloReplanejar').addEventListener('click', openReplanCicloModal);
 document.getElementById('replanCicloClose').addEventListener('click', ()=> document.getElementById('replanCicloOverlay').classList.remove('show'));
 function openReplanCicloModal(){
@@ -9160,6 +9031,7 @@ function renderAll(skipMaterias){
   renderPlanejamento();
   renderReportes();
   renderProvas();
+  renderSettingsControls();
   updateRevisaoBadge();
   wireTooltips();
 }
