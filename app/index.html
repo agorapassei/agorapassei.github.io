@@ -1629,7 +1629,7 @@
   /* Grid de 7 colunas ocupando a largura toda (sem scroll horizontal) - materias com nome
      longo quebram linha e a caixa cresce em altura pra caber o nome inteiro, em vez de cortar. */
   .cal-grid{display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:5px;}
-  .cal-day-col{min-height:76px; background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:8px 4px; transition:background .12s ease, border-color .12s ease; min-width:0;}
+  .cal-day-col{min-height:100px; background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:8px 4px; transition:background .12s ease, border-color .12s ease; min-width:0;}
   .cal-day-col.hoje{border-color:var(--green); box-shadow:inset 0 0 0 1px var(--green);}
   .cal-day-col.cal-drop-hover{background:color-mix(in srgb, var(--green) 10%, var(--bg));}
   .cal-day-hd{text-align:center; margin-bottom:8px;}
@@ -2107,14 +2107,14 @@
         <div id="cicloDonutWrap"></div>
         <div id="cicloLegend" class="ciclo-legend"></div>
       </div>
-      <div class="card">
+      <details class="card recolhivel">
+        <summary><h2>Sequência de Estudos</h2><span class="marcador" aria-hidden="true"></span></summary>
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-          <h2 style="margin:0;">Sequência de Estudos</h2>
+          <label class="ciclo-check-row"><input type="checkbox" id="cicloMostrarFinalizados" checked><span>Mostrar finalizados</span></label>
           <button class="btn ghost sm" id="btnCicloEditSeq"><svg class=ic-svg aria-hidden=true><use href=#ic-pencil></use></svg></button>
         </div>
-        <label class="ciclo-check-row"><input type="checkbox" id="cicloMostrarFinalizados" checked><span>Mostrar finalizados</span></label>
         <div id="cicloSequencia"></div>
-      </div>
+      </details>
       <div class="card">
         <h2 style="margin:0 0 12px;">Mapa de calor de estudo</h2>
         <div class="heatmap-periodo-row">
@@ -3858,7 +3858,7 @@ function segundaFeiraDe(dataStr){
 // Sobe esse numero sempre que a logica de geracao da semana (decomporMateriaEmItens,
 // distribuirComTeto, etc) mudar de um jeito que invalida semanas ja geradas - forca uma
 // regeneracao automatica (unica, sem botao) na proxima visita, mesmo sem virar a segunda.
-const CALENDARIO_ALGO_VERSION = 2;
+const CALENDARIO_ALGO_VERSION = 3;
 function ensureCalendarioDefaults(){
   if(!state.calendario) state.calendario = { semanaRef:null, blocos:{}, diasPeso:null, algoVersion:null };
   const c = state.calendario;
@@ -3985,8 +3985,7 @@ function gerarSemanaCalendario(forcar){
     save();
     return;
   }
-  const totalBlocos = Math.max(0, Math.round(cc.horasPorSemana*2)); // unidades de 30min na semana toda (soh usado pra capacidade dos dias)
-  const totalUnid15 = Math.max(0, Math.round(cc.horasPorSemana*4)); // unidades de 15min na semana toda (granularidade fina do teto por materia)
+  const totalUnid15 = Math.max(0, Math.round(cc.horasPorSemana*4)); // unidades de 15min na semana toda (orcamento nominal, baseado em horasPorSemana)
   // Base de distribuicao entre materias: deficit atual (o que "empurra" pendencia pra
   // frente); se ninguem tem deficit (ciclo em dia/quase fechando), cai pro peso normal
   // pra semana nao ficar vazia bem no fim do ciclo. No ramo de deficit, cada materia tem um
@@ -4013,10 +4012,27 @@ function gerarSemanaCalendario(forcar){
   let unid15PorMateria;
   if(temDeficit){
     const tetos = {};
+    let somaTetos = 0;
     Object.keys(baseMaterias).forEach(siStr=>{
-      tetos[siStr] = Math.round(arredondar15min(baseMaterias[siStr])/900); // deficit em unidades de 15min
+      const t = Math.round(arredondar15min(baseMaterias[siStr])/900); // deficit em unidades de 15min
+      tetos[siStr] = t;
+      somaTetos += t;
     });
-    unid15PorMateria = distribuirComTeto(baseMaterias, tetos, totalUnid15);
+    // Cada materia tem seu proprio meta arredondado de forma INDEPENDENTE pra 15min (ver
+    // cicloMetaSegundos), entao a soma dos tetos pode nao bater com totalUnid15 (horasPorSemana)
+    // exatamente por causa desse arredondamento - cada materia pode desviar ate +-7,5min do seu
+    // valor exato, e essa folga pode se acumular em qualquer direcao. Se o orcamento nominal
+    // (totalUnid15) fosse usado sempre como teto rigido, a materia com a menor sobra no
+    // arredondamento proporcional acabaria perdendo 15min de forma essencialmente aleatoria -
+    // ex: uma materia mostra 4h45 no ciclo mas o calendario da semana so entregava 4h30. Por
+    // isso, quando a soma dos tetos fica dentro da margem de arredondamento esperada (numero de
+    // materias/2 unidades de 15min), usa a soma exata dos tetos como orcamento - cada materia
+    // recebe seu proprio teto integralmente. So mantem o teto rigido em horasPorSemana quando o
+    // deficit total realmente excede a semana por mais que essa margem (backlog de verdade, meio
+    // de ciclo) - nesse caso o excesso normal e' empurrado pra semana seguinte, como esperado.
+    const margemArredondamento = Math.ceil(Object.keys(tetos).length/2);
+    const orcamento = somaTetos<=totalUnid15+margemArredondamento ? somaTetos : totalUnid15;
+    unid15PorMateria = distribuirComTeto(baseMaterias, tetos, orcamento);
   } else {
     unid15PorMateria = distribuirInteiros(baseMaterias, totalUnid15); // sem teto - so proporcional ao peso
   }
@@ -4030,6 +4046,11 @@ function gerarSemanaCalendario(forcar){
   let diasPeso = {};
   DIAS_SEMANA.forEach(d=>{ if((c.diasPeso[d]||0)>0) diasPeso[d]=c.diasPeso[d]; });
   if(Object.keys(diasPeso).length===0) DIAS_SEMANA.forEach(d=> diasPeso[d]=1); // fallback defensivo
+  // Capacidade dos dias derivada do total REAL de minutos que sera exibido nessa semana (que
+  // pode divergir um pouco de horasPorSemana*2 por causa do ajuste de arredondamento acima) -
+  // garante que os dias sempre tenham espaco suficiente pra tudo, sem estourar no ultimo dia.
+  const totalMinutosReal = sequenciaItens.reduce((s,it)=>s+it.qtd*it.min,0);
+  const totalBlocos = Math.max(0, Math.ceil(totalMinutosReal/30)); // unidades de 30min na semana toda (soh usado pra capacidade dos dias)
   const blocosPorDia = distribuirInteiros(diasPeso, totalBlocos); // capacidade de cada dia, em unidades de 30min
   function expandirItens(lista){
     const out = [];
@@ -4934,7 +4955,38 @@ function migrateDashboardWidgets(dash){
     // disso nao tinham w.periodo; assume 7 dias (o comportamento fixo que existia antes).
     if(w.metricId==='estudo_semanal_grafico' && !w.periodo) w.periodo = '7';
   });
+  ensureTempoRestanteTrio(dash);
   return dash;
+}
+// Ajuste feito em ago/2026: o widget "Tempo estimado restante" passou a vir, por padrao, em
+// TRES linhas lado a lado (Consolidado, Teoria, Questoes - nessa ordem), cada uma no nivel
+// "Geral", pra dar a visao completa de cara sem precisar trocar o seletor toda hora. Isso so
+// roda UMA vez por dashboard ja existente (dash._tempoRestanteTrioV1) pra nao reverter se o
+// usuario decidir remover ou reconfigurar algum desses widgets depois.
+function ensureTempoRestanteTrio(dash){
+  if(dash._tempoRestanteTrioV1) return;
+  dash._tempoRestanteTrioV1 = true;
+  const modos = ['consolidado','teoria','questoes'];
+  const existentes = {};
+  dash.widgets.forEach(w=>{
+    if(w.metricId==='tempo_restante' && !w.scope && modos.includes(w.modo) && !existentes[w.modo]) existentes[w.modo] = w;
+  });
+  let ancoraOrdem = null;
+  modos.forEach(m=>{ if(existentes[m] && (ancoraOrdem===null || existentes[m].ordem<ancoraOrdem)) ancoraOrdem = existentes[m].ordem; });
+  if(ancoraOrdem===null){
+    const ordens = dash.widgets.map(w=>w.ordem||0);
+    ancoraOrdem = ordens.length? Math.min(...ordens) : 1;
+  }
+  modos.forEach((m,i)=>{
+    if(!existentes[m]){
+      const novo = { id: uid(), metricId:'tempo_restante', modo:m, periodo:null, scope:null, visivel:true, ordem: ancoraOrdem+i*0.01, tamanho:'cheio' };
+      dash.widgets.push(novo);
+      existentes[m] = novo;
+    }
+  });
+  modos.forEach((m,i)=>{ existentes[m].ordem = ancoraOrdem + i*0.01; });
+  dash.widgets.sort((a,b)=>(a.ordem||0)-(b.ordem||0)).forEach((w,i)=>{ w.ordem = i+1; });
+  save();
 }
 // Disposição padrão do Painel pra quem nunca personalizou (conta nova, ou depois de
 // "Zerar progresso") - configurada por Bruno em ago/2026 pra bater com o que ele monta
@@ -4944,15 +4996,16 @@ function migrateDashboardWidgets(dash){
 function ensureDashboard(){
   if(!state.dashboard){
     state.dashboard = { widgets: [
-      { id: uid(), metricId:'tempo_restante', modo:'teoria', periodo:null, scope:null, visivel:true, ordem:1, tamanho:'cheio' },
-      { id: uid(), metricId:'taxa_dominio', modo:null, scope:null, visivel:true, ordem:2 },
-      { id: uid(), metricId:'tempo_total', modo:'consolidado', periodo:'total', scope:null, visivel:true, ordem:3 },
-      { id: uid(), metricId:'tempo_restante', modo:'consolidado', scope:null, visivel:true, ordem:4 },
-      { id: uid(), metricId:'consistencia', modo:null, scope:null, visivel:true, ordem:5 },
-      { id: uid(), metricId:'distribuicao_tempo', modo:null, scope:null, visivel:true, ordem:6 },
-      { id: uid(), metricId:'paginas_lidas', modo:null, periodo:null, scope:null, visivel:true, ordem:7, tamanho:'metade' },
-      { id: uid(), metricId:'questoes_feitas', modo:null, periodo:null, scope:null, visivel:true, ordem:8, tamanho:'metade' },
-      { id: uid(), metricId:'progresso_materias', modo:null, periodo:null, scope:null, visivel:true, ordem:9, tamanho:'metade' },
+      { id: uid(), metricId:'tempo_restante', modo:'consolidado', periodo:null, scope:null, visivel:true, ordem:1, tamanho:'cheio' },
+      { id: uid(), metricId:'tempo_restante', modo:'teoria', periodo:null, scope:null, visivel:true, ordem:2, tamanho:'cheio' },
+      { id: uid(), metricId:'tempo_restante', modo:'questoes', periodo:null, scope:null, visivel:true, ordem:3, tamanho:'cheio' },
+      { id: uid(), metricId:'taxa_dominio', modo:null, scope:null, visivel:true, ordem:4 },
+      { id: uid(), metricId:'tempo_total', modo:'consolidado', periodo:'total', scope:null, visivel:true, ordem:5 },
+      { id: uid(), metricId:'consistencia', modo:null, scope:null, visivel:true, ordem:6 },
+      { id: uid(), metricId:'distribuicao_tempo', modo:null, scope:null, visivel:true, ordem:7 },
+      { id: uid(), metricId:'paginas_lidas', modo:null, periodo:null, scope:null, visivel:true, ordem:8, tamanho:'metade' },
+      { id: uid(), metricId:'questoes_feitas', modo:null, periodo:null, scope:null, visivel:true, ordem:9, tamanho:'metade' },
+      { id: uid(), metricId:'progresso_materias', modo:null, periodo:null, scope:null, visivel:true, ordem:10, tamanho:'metade' },
     ]};
     save();
   } else {
