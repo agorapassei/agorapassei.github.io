@@ -3000,8 +3000,14 @@ function save(){
   // acesso à rede local a cada salvamento, o que não queremos.
   if(window.localSrvActive && typeof localSrvPush==='function') localSrvPush();
   // Se a sincronizacao na nuvem estiver configurada (ver secao "SINCRONIZACAO NA
-  // NUVEM" mais abaixo), agenda um envio (com debounce, pra nao martelar a rede).
-  if(typeof syncSchedulePush==='function') syncSchedulePush();
+  // NUVEM" mais abaixo), agenda um envio (com debounce, pra nao martelar a rede) e
+  // marca que este aparelho tem uma mudança que a nuvem ainda não confirmou receber -
+  // usado pra detectar conflito real (ver syncRun/syncHandleConflict mais abaixo).
+  if(typeof syncSchedulePush==='function'){
+    _syncLocalDirty = true;
+    try{ localStorage.setItem('estudo-certo-sync-localedit', new Date().toISOString()); }catch(e){}
+    syncSchedulePush();
+  }
 }
 function todayStr(){ return new Date().toISOString().slice(0,10); }
 function addDays(str,n){ const d=new Date(str+"T00:00:00"); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
@@ -6682,6 +6688,15 @@ document.getElementById('btnImport').addEventListener('click', ()=> document.get
 document.getElementById('fileImport').addEventListener('change', (e)=>{
   const file = e.target.files[0];
   if(!file) return;
+  // Importar SUBSTITUI o progresso atual inteiro, e se a conta estiver sincronizada isso
+  // depois sobe pra nuvem também. Selecionar o arquivo errado sem essa confirmação
+  // apagaria progresso em uso sem chance de volta - por isso a mesma pergunta explícita
+  // que "Zerar progresso" já tinha, aqui também.
+  const avisoNuvem = syncEnabled() ? ' Isso também vai substituir o que está sincronizado na nuvem.' : '';
+  if(!confirm('Importar este arquivo vai SUBSTITUIR todo o progresso atual deste dispositivo.'+avisoNuvem+' Continuar?')){
+    e.target.value = "";
+    return;
+  }
   const reader = new FileReader();
   reader.onload = (evt)=>{
     try{
@@ -6696,12 +6711,16 @@ document.getElementById('fileImport').addEventListener('change', (e)=>{
   e.target.value = "";
 });
 document.getElementById('btnReset').addEventListener('click', ()=>{
-  if(confirm("Isso vai apagar todo o progresso salvo neste dispositivo. Deseja continuar?")){
-    state = defaultState();
-    save();
-    renderAll();
-    toast("Progresso zerado");
-  }
+  // "Zerar progresso" é irreversível: apaga local e, se sincronizado, sobrescreve a nuvem
+  // poucos segundos depois (ver save()/syncSchedulePush()). Mesmo sendo um confirm() de
+  // clique único, o histórico automático no Supabase (progress_history) guarda uma cópia
+  // de antes de zerar, então não é uma perda definitiva mesmo que seja clicado sem querer.
+  const avisoNuvem = syncEnabled() ? ' Isso também vai apagar o que está sincronizado na nuvem.' : '';
+  if(!confirm('Isso vai apagar TODO o progresso salvo neste dispositivo, sem volta.'+avisoNuvem+' Continuar?')) return;
+  state = defaultState();
+  save();
+  renderAll();
+  toast("Progresso zerado");
 });
 
 /* ===================== ARQUIVO LOCAL (automático) =====================
@@ -6769,12 +6788,21 @@ if(btnFsLocalCheck) btnFsLocalCheck.addEventListener('click', async ()=>{
    dentro, sem tocar em nada externo. Sem essa configuração, o app continua funcionando
    100% normal, só local. Cada conta tem seu próprio progresso isolado (protegido por
    Row Level Security no banco, não só por "ninguém saber a senha").
-   Estratégia de conflito: "o mais recente vence" (compara updated_at). Não faz merge
-   campo a campo - se a mesma conta estudar em dois aparelhos ao mesmo tempo sem
-   sincronizar entre as sessões, o que sincronizar por último sobrescreve o outro. */
+   Estratégia de conflito: NÃO é mais "o mais recente vence" cego. Guardamos se este
+   aparelho tem alteração local ainda não confirmada na nuvem (_syncLocalDirty) e o
+   horário dessa alteração (SYNC_LOCAL_EDIT_KEY). Ao puxar da nuvem, só sobrescrevemos
+   o progresso local silenciosamente se ESTE aparelho não tinha nada pendente - ou seja,
+   a nuvem só mudou porque outro aparelho sincronizou depois da última vez que este
+   aparelho se atualizou. Se os dois lados mudaram de forma independente (conflito de
+   verdade), paramos e perguntamos ao usuário qual versão manter, mostrando um resumo
+   de cada lado (ver syncHandleConflict). Isso evita perda silenciosa de progresso. */
 const SYNC_PROJECT_KEY = 'estudo-certo-sync-project'; // { url, key } do projeto Supabase (nao muda por usuario)
 const SYNC_SESSION_KEY = 'estudo-certo-sync-session'; // { access_token, refresh_token, expires_at, user_id, email }
 const SYNC_LASTTS_KEY = 'estudo-certo-sync-lastts';
+const SYNC_LOCAL_EDIT_KEY = 'estudo-certo-sync-localedit'; // quando este aparelho editou por último (mesmo sem ter subido ainda)
+// declarada com "var" (não "let") de propósito: save() já referencia essa variável e é
+// definida bem antes desta linha no arquivo - "var" evita erro de "temporal dead zone".
+var _syncLocalDirty = false; // true = este aparelho tem alteração ainda não confirmada como recebida na nuvem
 function syncProjectConfig(){
   try{ return JSON.parse(localStorage.getItem(SYNC_PROJECT_KEY)||'null'); }catch(e){ return null; }
 }
@@ -6874,6 +6902,7 @@ async function syncPushCloud(){
   });
   if(!res.ok) throw new Error('Supabase POST falhou: HTTP '+res.status);
   syncSetLastSyncedAt(nowIso);
+  _syncLocalDirty = false; // nuvem agora tem exatamente o que este aparelho tinha
   return true;
 }
 function syncSchedulePush(){
@@ -6909,7 +6938,9 @@ function syncRenderStatus(mode, extra){
     loginRow.style.display='none'; advToggle.style.display='none'; fields.style.display='none';
     btnNow.style.display=''; btnDisconnect.style.display='';
   } else if(mode==='error'){
-    statusEl.innerHTML = '<svg class=ic-svg aria-hidden=true><use href=#ic-alert></use></svg> Conectado como ' + ((session&&session.email)||'') + ', mas a última tentativa de sincronizar falhou (' + (extra||'sem internet ou dados incorretos') + '). O progresso continua salvo aqui normalmente; tentará de novo na próxima alteração.';
+    // Mesma regra do modo 'synced' logo acima: e-mail e o detalhe do erro (extra) sempre
+    // escapados antes de entrar no innerHTML, nunca concatenados crus.
+    statusEl.innerHTML = '<svg class=ic-svg aria-hidden=true><use href=#ic-alert></use></svg> Conectado como ' + escapeHtml((session&&session.email)||'') + ', mas a última tentativa de sincronizar falhou (' + escapeHtml(extra||'sem internet ou dados incorretos') + '). O progresso continua salvo aqui normalmente; tentará de novo na próxima alteração.';
     loginRow.style.display='none'; advToggle.style.display='none'; fields.style.display='none';
     btnNow.style.display=''; btnDisconnect.style.display='';
   }
@@ -6918,7 +6949,51 @@ async function syncApplyCloudRow(row){
   state = migrateState(Object.assign(defaultState(), row.data));
   localStorage.setItem(STORE_KEY, JSON.stringify(state)); // grava local sem re-agendar push (evita loop)
   syncSetLastSyncedAt(row.updated_at);
+  _syncLocalDirty = false; // este aparelho agora reflete exatamente o que a nuvem tinha
   renderAll();
+}
+// Resumo simples e legível do que cada lado tem, pra mostrar num conflito real. Não é
+// um diff campo a campo (isso exigiria mesclagem, ver comentário no topo da seção) - é
+// só o suficiente pra dar uma ideia de "qual lado parece ter mais coisa" e decidir.
+function syncCountsSummary(s){
+  s = s || {};
+  return {
+    aulas: Object.keys(s.aulas||{}).length,
+    sessoes: (s.sessions||[]).length,
+    respostas: (s.answerLog||[]).length,
+    reportes: (s.reportes||[]).length,
+    temCiclo: !!s.ciclo
+  };
+}
+function syncFmtData(iso){
+  try{ return new Date(iso).toLocaleString('pt-BR'); }catch(e){ return iso || 'desconhecido'; }
+}
+// Conflito real: este aparelho tem alteração não confirmada na nuvem E a nuvem também
+// mudou (por outro aparelho) depois da última vez que sincronizamos. Não decidimos
+// sozinhos - explicamos os dois lados e perguntamos. Nada é perdido de qualquer forma:
+// o lado descartado continua existindo (histórico no Supabase, ou os dados atuais deste
+// aparelho antes de aceitar a nuvem).
+async function syncHandleConflict(row){
+  const localEditIso = localStorage.getItem(SYNC_LOCAL_EDIT_KEY);
+  const cLocal = syncCountsSummary(state);
+  const cCloud = syncCountsSummary(row.data);
+  const localMaisRecente = localEditIso && new Date(localEditIso) > new Date(row.updated_at);
+  const msg =
+    'Conflito de sincronização: este aparelho e a nuvem mudaram de forma independente.\n\n' +
+    'ESTE APARELHO (alterado em ' + syncFmtData(localEditIso) + (localMaisRecente ? ' — mais recente' : '') + '):\n' +
+    '  Aulas: ' + cLocal.aulas + '  |  Sessões: ' + cLocal.sessoes + '  |  Respostas: ' + cLocal.respostas + '  |  Reportes: ' + cLocal.reportes + '\n\n' +
+    'NUVEM (alterada em ' + syncFmtData(row.updated_at) + (!localMaisRecente ? ' — mais recente' : '') + '):\n' +
+    '  Aulas: ' + cCloud.aulas + '  |  Sessões: ' + cCloud.sessoes + '  |  Respostas: ' + cCloud.respostas + '  |  Reportes: ' + cCloud.reportes + '\n\n' +
+    'Nada é apagado de qualquer forma (o lado que você não escolher fica registrado no histórico da nuvem).\n\n' +
+    'OK = manter os dados DESTE aparelho (sobrescreve a nuvem)\nCancelar = usar os dados da NUVEM (sobrescreve este aparelho)';
+  const manterLocal = confirm(msg);
+  if(manterLocal){
+    await syncPushCloud();
+    toast('Mantido o progresso deste aparelho — nuvem atualizada.');
+  } else {
+    await syncApplyCloudRow(row);
+    toast('Progresso da nuvem aplicado neste aparelho.');
+  }
 }
 async function syncRun(){
   if(!syncEnabled()){ syncRenderStatus('unlinked'); return; }
@@ -6933,8 +7008,16 @@ async function syncRun(){
     }
     const localTs = syncGetLastSyncedAt();
     if(!localTs || new Date(row.updated_at) > new Date(localTs)){
-      await syncApplyCloudRow(row);
-      toast('Progresso sincronizado da nuvem ');
+      if(_syncLocalDirty){
+        // Os dois lados mudaram desde a última sincronização confirmada - conflito de
+        // verdade, não decide sozinho.
+        await syncHandleConflict(row);
+      } else {
+        // Este aparelho não tinha nada pendente - a nuvem só está mais nova porque outro
+        // aparelho sincronizou depois. Seguro adotar sem perguntar.
+        await syncApplyCloudRow(row);
+        toast('Progresso sincronizado da nuvem ');
+      }
     }
     syncRenderStatus('synced');
   }catch(e){
@@ -6964,7 +7047,7 @@ async function syncSignInClick(){
 async function syncSignUpClick(){
   const { email, password } = syncReadLoginFields();
   if(!email || !password){ toast('Preencha e-mail e senha pra criar a conta.'); return; }
-  if(password.length < 6){ toast('A senha precisa ter pelo menos 6 caracteres.'); return; }
+  if(password.length < 10){ toast('A senha precisa ter pelo menos 10 caracteres.'); return; }
   try{
     const body = await syncSignUp(email, password);
     if(!body.access_token){
@@ -8681,7 +8764,7 @@ async function authGateSignUpClick(){
   const msgEl = document.getElementById('authGateMsg');
   const btn = document.getElementById('authGateSignUp');
   if(!email || !password){ msgEl.textContent = 'Preencha e-mail e senha.'; return; }
-  if(password.length < 6){ msgEl.textContent = 'A senha precisa ter pelo menos 6 caracteres.'; return; }
+  if(password.length < 10){ msgEl.textContent = 'A senha precisa ter pelo menos 10 caracteres.'; return; }
   btn.disabled = true; msgEl.textContent = '';
   try{
     const body = await syncSignUp(email, password);
