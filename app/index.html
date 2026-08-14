@@ -217,6 +217,7 @@
     display:flex; align-items:center; gap:.45em;
   }
   header.app h1 .ic-svg{color:var(--green); width:1.15em; height:1.15em;}
+  header.app h1 .app-title-icon{width:1.15em; height:1.15em; border-radius:5px; object-fit:cover; display:block; flex-shrink:0; vertical-align:middle;}
   /* Nome da aba atual: sempre visivel, junto com o nome do app, o resumo da aba (.sub)
      e as 3 metricas (.top-stats) - o cabecalho e' o mesmo em todas as abas por padrao,
      nao so no Painel. */
@@ -1544,9 +1545,9 @@
     .hib-item .hib-est{display:none;}
   }
 
-  #dashboardGrid{display:grid; grid-template-columns:repeat(6,1fr); gap:12px; align-items:start;}
-  #dashboardGrid .card{margin-bottom:0;}
-  .widget-card{grid-column:span 3;}
+  #dashboardGrid{display:grid; grid-template-columns:repeat(6,1fr); gap:12px; align-items:stretch;}
+  #dashboardGrid .card{margin-bottom:0; height:100%; box-sizing:border-box;}
+  .widget-card{grid-column:span 3; display:flex; flex-direction:column;}
   .widget-card.tamanho-terco{grid-column:span 2;}
   .widget-card.tamanho-metade{grid-column:span 3;}
   .widget-card.tamanho-dois-tercos{grid-column:span 4;}
@@ -1826,7 +1827,7 @@
     <span></span><span></span><span></span>
     <i class="tab-badge" id="menuBadge" hidden></i>
   </button>
-  <h1 id="appTitle"><svg class=ic-svg aria-hidden=true><use href=#ic-book></use></svg> Estudo Certo</h1>
+  <h1 id="appTitle"><img src="icon-192.png" alt="" width="18" height="18" class="app-title-icon"> Estudo Certo</h1>
   <div class="hdr-tab-name" id="hdrTabName">Painel</div>
   <div class="sub" id="appSub">Acompanhamento de apostilas e questões</div>
   <div class="top-stats">
@@ -2389,7 +2390,11 @@
   document.title = nome;
   const metaTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
   if(metaTitle) metaTitle.setAttribute('content', nome);
-  const ICONE_APP = '<svg class=ic-svg aria-hidden=true><use href=#ic-book></use></svg> ';
+  // Ícone real do app (icon-192.png) em vez do livro genérico - mesmo arquivo usado no
+  // manifest/favicon, pra bater com o que a pessoa já reconhece na tela inicial/aba do
+  // navegador. width/height explícitos (em vez de só CSS) evitam o "pulo" de layout
+  // enquanto a imagem carrega, que é o que desalinhava com "Painel" logo abaixo.
+  const ICONE_APP = '<img src="icon-192.png" alt="" width="18" height="18" class="app-title-icon"> ';
   window.APP_BRAND_NAME = nome;                       // texto puro: vai para textContent
   window.APP_BRAND_HTML = ICONE_APP + escapeHtml(nome); // com icone: vai para innerHTML
   const appTitleEl = document.getElementById('appTitle');
@@ -5561,7 +5566,10 @@ function renderPainel(){
       card.innerHTML = `<h2>Métrica indisponível</h2><div class="empty">Esta métrica não existe mais.</div>`;
     } else {
       const scopeParam = w.scope? {si:w.scope.si, ai:w.scope.ai} : null;
-      const controlsHtml = buildWidgetControlsHtml(w, def, nivel);
+      // O widget "Tempo estimado restante" no modo Todos (trio) é fixo por design - mostra
+      // Consolidado/Teoria/Questões lado a lado sempre em nível Geral, sem seletor de modo
+      // nem de nível (pedido do Bruno: menos controles, card mais limpo).
+      const controlsHtml = (w.metricId==='tempo_restante' && w.modo==='trio') ? '' : buildWidgetControlsHtml(w, def, nivel);
       let bodyHtml;
       // isSimpleValue: widgets que so mostram um numero grande + legenda (sem grafico/donut
       // proprio) - esses ganham um fundo levemente tintado (classe .kpi, ver CSS - um unico
