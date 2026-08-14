@@ -1654,6 +1654,37 @@
   .ciclo-puxar-row .nm small{display:block; font-weight:400; color:var(--text-mut); font-size:.74rem; margin-top:2px;}
   .ciclo-puxar-row .def{font-size:.72rem; color:var(--text-mut); white-space:nowrap; font-family:'Courier Prime',ui-monospace,monospace;}
   .ciclo-puxar-row.pior .def{font-weight:700; color:var(--mat-cor);}
+
+  /* ---- Calendário da semana (Ciclo) ---- */
+  .cal-grid{display:flex; gap:8px; overflow-x:auto; padding-bottom:6px; -webkit-overflow-scrolling:touch;}
+  .cal-day-col{flex:0 0 116px; min-height:64px; background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:8px 6px; transition:background .12s ease, border-color .12s ease;}
+  .cal-day-col.hoje{border-color:var(--green); box-shadow:inset 0 0 0 1px var(--green);}
+  .cal-day-col.cal-drop-hover{background:color-mix(in srgb, var(--green) 10%, var(--bg));}
+  .cal-day-hd{text-align:center; margin-bottom:8px;}
+  .cal-day-hd .nm{font-size:.74rem; font-weight:800; color:var(--text);}
+  .cal-day-hd .dt{font-size:.64rem; color:var(--text-mut);}
+  .cal-day-hd .pg{font-size:.64rem; color:var(--text-mut); margin-top:1px;}
+  .cal-day-empty{font-size:.66rem; color:var(--text-mut); text-align:center; padding:10px 2px; opacity:.7;}
+  .cal-block{
+    --mat-cor:#ccc;
+    background:color-mix(in srgb, var(--mat-cor) 22%, var(--card));
+    border-left:4px solid var(--mat-cor);
+    border-radius:8px; padding:7px 8px; margin-bottom:6px; font-size:.68rem; font-weight:700; color:var(--text);
+    cursor:grab; touch-action:none; user-select:none; -webkit-user-select:none;
+    display:flex; align-items:center; justify-content:space-between; gap:4px;
+    transition:opacity .12s ease, border-top-width .1s ease, border-bottom-width .1s ease;
+  }
+  .cal-block .cal-block-nm{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .cal-block svg{width:13px; height:13px; flex-shrink:0; color:var(--mat-cor);}
+  .cal-block.done{opacity:.55; cursor:default;}
+  .cal-block.inativa{opacity:.4; text-decoration:line-through;}
+  .cal-block.cal-dragging{opacity:.35;}
+  .cal-block.cal-drop-before{border-top:3px solid var(--green);}
+  .cal-block.cal-drop-after{border-bottom:3px solid var(--green);}
+  .cal-drag-ghost{position:fixed; z-index:999; pointer-events:none; opacity:.9; box-shadow:0 8px 22px rgba(0,0,0,.3); transform:rotate(-2deg);}
+  .cal-dias-cfg{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px;}
+  .cal-dia-cfg-item{display:flex; flex-direction:column; align-items:center; gap:3px; font-size:.68rem; color:var(--text-mut); font-weight:700;}
+  .cal-dia-cfg-item input{width:52px; text-align:center; padding:6px 2px;}
   /* Histórico de ciclos: linha do tempo vertical de marcos clicáveis (mais recente
      primeiro). Cada marco expande pra mostrar os detalhes daquele fechamento. */
   .ciclo-hist-timeline{display:flex; flex-direction:column;}
@@ -2076,6 +2107,14 @@
 
     <div id="cicloMain" style="display:none;">
       <div id="cicloAvisoAjuste"></div>
+      <div class="card">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:2px;">
+          <h2 style="margin:0;">Calendário da semana <span id="tipCalendarioSemana"></span></h2>
+          <button class="btn ghost sm" id="btnCalRecalcular" title="Recalcular a semana atual a partir do déficit e pesos de agora"><svg class=ic-svg aria-hidden=true><use href=#ic-restart></use></svg></button>
+        </div>
+        <div style="font-size:.74rem; color:var(--text-mut); margin-bottom:10px;" id="calSemanaLabel"></div>
+        <div class="cal-grid" id="calGrid"></div>
+      </div>
       <details class="card ciclo-puxar recolhivel">
         <summary><h2>Puxar sessão agora</h2><span class="marcador" aria-hidden="true"></span></summary>
         <div class="ciclo-puxar-sub" id="cicloPuxarSub"></div>
@@ -2562,7 +2601,7 @@ function defaultState(){
     sessions:[], activeSession:null, subjectWeights:{}, dashboard:null, ciclo:null,
     settings:{ theme:'dark', accent:'apostila', pomodoro:{ focusMin:30, breakMin:10 } }, metaDataAlvo:null, answerLog:[], historicoCiclos:[],
     favorites:{}, onboardingDone:false, onboarding:null,
-    reportes:[], provas:{}, stagesExercMigrado:true };
+    reportes:[], provas:{}, stagesExercMigrado:true, calendario:null };
 }
 /* ===================== ORDEM DE EXIBICAO DAS MATERIAS =====================
    Devolve [{s, si}] em ordem alfabetica de nome, respeitando acento (pt-BR).
@@ -2951,6 +2990,7 @@ function migrateState(s){
   });
   if(!Array.isArray(s.reportes)) s.reportes = []; // questões reportadas como erradas (ver reportarQuestao)
   if(!s.provas) s.provas = {}; // resultados dos simulados de provas anteriores (ver aba Provas)
+  if(s.calendario===undefined) s.calendario = null; // calendário semanal do Ciclo (ver ensureCalendarioDefaults) - so existe depois da primeira geracao
   if(s.onboardingDone===undefined){
     // Backup/instalacao que ja tinha progresso ANTES do assistente existir - nao interrompe
     // quem ja usa o app com o wizard de primeiro acesso. So aparece de verdade pra quem
@@ -3154,6 +3194,15 @@ function endActiveSession(extra){
   }
   state.sessions.push(sessao);
   state.activeSession = null;
+  // Se essa sessao nasceu de um clique num bloco do Calendario da Semana, marca aquele
+  // bloco especifico como concluido (ver abrirSessaoBloco/openStartSessionModal). Sessao
+  // iniciada pelo fluxo normal (Materias, Puxar sessao agora) nao mexe em bloco nenhum.
+  if(activeSessionCalendarRef){
+    const c = state.calendario;
+    const bloco = c && c.blocos[activeSessionCalendarRef.dia] && c.blocos[activeSessionCalendarRef.dia][activeSessionCalendarRef.idx];
+    if(bloco && bloco.si===a.si){ bloco.done = true; bloco.sessionId = sessao.id; }
+    activeSessionCalendarRef = null;
+  }
   markActivity();
   save();
   checkCicloCompletion();
@@ -3161,6 +3210,7 @@ function endActiveSession(extra){
 }
 function cancelActiveSession(){
   state.activeSession = null;
+  activeSessionCalendarRef = null;
   save();
 }
 function addManualSession(si, ai, tipo, minutos, extra){
@@ -3831,6 +3881,167 @@ function puxarSessaoAgora(si){
   openStartSessionModal(si, proximaAulaPendenteMateria(si));
 }
 
+/* ===================== CALENDÁRIO DA SEMANA (Ciclo) =====================
+   Visão semanal do Ciclo: a mesma meta de horas por matéria (cicloMetaSegundos)
+   distribuída em blocos de 30min ao longo dos 7 dias, que o usuário pode arrastar
+   pra reorganizar. Não é um sistema paralelo ao Ciclo — é só outra forma de olhar
+   pro mesmo motor (peso, meta, estudado, déficit). Guardado em state.calendario.
+
+   Geração da semana: em vez de repetir sempre a mesma meta bruta por matéria, cada
+   semana nasce olhando o DÉFICIT atual (cicloMetaSegundos - cicloEstudadoSegundos,
+   igual materiasAtrasadasCiclo). Isso resolve sozinho a regra de "o que não foi
+   estudado empurra pra semana seguinte": matéria que ficou pra trás numa semana
+   automaticamente puxa mais blocos na próxima, porque o déficit dela continua alto;
+   matéria em dia recebe proporcionalmente menos. Nunca ultrapassa o total real que
+   falta no ciclo, porque déficit tem teto = meta. Uma vez gerada, a semana NÃO se
+   regenera sozinha em cada render (isso apagaria os arrastos manuais do usuário) —
+   só quando a segunda-feira vira (checkCalendarioRollover) ou quando o usuário pede
+   explicitamente (botão "Recalcular"). */
+const DIAS_SEMANA = ['seg','ter','qua','qui','sex','sab','dom'];
+const DIAS_SEMANA_LABEL = { seg:'Seg', ter:'Ter', qua:'Qua', qui:'Qui', sex:'Sex', sab:'Sáb', dom:'Dom' };
+// Segunda-feira (YYYY-MM-DD) da semana que contém dataStr.
+function segundaFeiraDe(dataStr){
+  const d = new Date(dataStr+'T00:00:00');
+  const dow = d.getDay(); // 0=domingo..6=sabado
+  const diff = dow===0 ? -6 : 1-dow;
+  d.setDate(d.getDate()+diff);
+  return d.toISOString().slice(0,10);
+}
+function ensureCalendarioDefaults(){
+  if(!state.calendario) state.calendario = { semanaRef:null, blocos:{}, diasPeso:null };
+  const c = state.calendario;
+  if(!c.diasPeso) c.diasPeso = { seg:1, ter:1, qua:1, qui:1, sex:1, sab:1, dom:1 };
+  if(!c.blocos) c.blocos = {};
+  DIAS_SEMANA.forEach(d=>{ if(!Array.isArray(c.blocos[d])) c.blocos[d] = []; });
+  return c;
+}
+// Distribui `total` unidades inteiras entre as chaves de `pesos` (objeto chave->peso>0),
+// proporcional ao peso de cada uma, sempre fechando exatamente em `total` (método dos
+// maiores restos - evita que arredondamento por chave deixe sobra ou falta no total).
+function distribuirInteiros(pesos, total){
+  const chaves = Object.keys(pesos).filter(k=>pesos[k]>0);
+  const somaPesos = chaves.reduce((s,k)=>s+pesos[k],0);
+  const out = {};
+  if(somaPesos<=0 || total<=0){ chaves.forEach(k=>out[k]=0); return out; }
+  const info = {};
+  let somaInt = 0;
+  chaves.forEach(k=>{
+    const exato = pesos[k]/somaPesos*total;
+    const inteiro = Math.floor(exato);
+    info[k] = { inteiro, frac: exato-inteiro };
+    somaInt += inteiro;
+  });
+  let resto = total - somaInt;
+  chaves.sort((a,b)=> info[b].frac - info[a].frac);
+  for(let i=0; i<resto; i++) info[chaves[i % chaves.length]].inteiro++;
+  chaves.forEach(k=> out[k]=info[k].inteiro);
+  return out;
+}
+// Achata um mapa {chave: quantidade} numa sequência intercalada (round-robin ponderado):
+// em vez de "AAAA BBB CC", produz algo como "ABABACABAC" - espalha as matérias ao longo
+// da semana em vez de empilhar vários blocos seguidos da mesma.
+function intercalarPorContagem(contagens){
+  const itens = Object.keys(contagens).filter(k=>contagens[k]>0).map(k=>({ chave:k, total:contagens[k], feito:0 }));
+  const totalGeral = itens.reduce((s,it)=>s+it.total,0);
+  const out = [];
+  for(let i=0;i<totalGeral;i++){
+    let melhor=null, melhorScore=Infinity;
+    itens.forEach(it=>{
+      if(it.feito>=it.total) return;
+      const score = it.feito/it.total;
+      if(score<melhorScore){ melhorScore=score; melhor=it; }
+    });
+    melhor.feito++;
+    out.push(melhor.chave);
+  }
+  return out;
+}
+// Gera (ou regenera, se forcar=true) o conteúdo da semana atual a partir do déficit vivo
+// de cada matéria no ciclo. Ver comentário da seção acima pra lógica completa.
+function gerarSemanaCalendario(forcar){
+  const c = ensureCalendarioDefaults();
+  const segunda = segundaFeiraDe(todayStr());
+  if(!forcar && c.semanaRef===segunda) return; // ja gerada, nao sobrescreve arrastos manuais
+  c.semanaRef = segunda;
+  const cc = state.ciclo;
+  if(!cc || !cc.horasPorSemana || cicloPesoTotal()<=0){
+    DIAS_SEMANA.forEach(d=> c.blocos[d]=[]);
+    save();
+    return;
+  }
+  const totalBlocos = Math.max(0, Math.round(cc.horasPorSemana*2));
+  // Base de distribuicao entre materias: deficit atual (o que "empurra" pendencia pra
+  // frente); se ninguem tem deficit (ciclo em dia/quase fechando), cai pro peso normal
+  // pra semana nao ficar vazia bem no fim do ciclo.
+  let baseMaterias = {};
+  SUBJECTS.forEach((s,si)=>{
+    if(!isSubjectActive(si)) return;
+    const deficit = Math.max(0, cicloMetaSegundos(si)-cicloEstudadoSegundos(si));
+    if(deficit>0) baseMaterias[si] = deficit;
+  });
+  if(Object.keys(baseMaterias).length===0){
+    SUBJECTS.forEach((s,si)=>{ if(isSubjectActive(si) && getCicloPeso(si)>0) baseMaterias[si]=getCicloPeso(si); });
+  }
+  if(Object.keys(baseMaterias).length===0 || totalBlocos<=0){
+    DIAS_SEMANA.forEach(d=> c.blocos[d]=[]);
+    save();
+    return;
+  }
+  const blocosPorMateria = distribuirInteiros(baseMaterias, totalBlocos);
+  const sequencia = intercalarPorContagem(blocosPorMateria); // length === totalBlocos, indices de materia
+  let diasPeso = {};
+  DIAS_SEMANA.forEach(d=>{ if((c.diasPeso[d]||0)>0) diasPeso[d]=c.diasPeso[d]; });
+  if(Object.keys(diasPeso).length===0) DIAS_SEMANA.forEach(d=> diasPeso[d]=1); // fallback defensivo
+  const blocosPorDia = distribuirInteiros(diasPeso, totalBlocos);
+  let cursor = 0;
+  DIAS_SEMANA.forEach(d=>{
+    const n = blocosPorDia[d]||0;
+    c.blocos[d] = sequencia.slice(cursor, cursor+n).map(siStr=>({ si:Number(siStr), done:false, sessionId:null }));
+    cursor += n;
+  });
+  save();
+}
+// Chamada no render da aba Ciclo: garante que a semana em tela corresponde a semana-calendario
+// atual, gerando a proxima automaticamente quando a segunda-feira vira.
+function checkCalendarioRollover(){
+  const c = ensureCalendarioDefaults();
+  const segunda = segundaFeiraDe(todayStr());
+  if(c.semanaRef!==segunda) gerarSemanaCalendario();
+}
+// Move um bloco de (fromDia,fromIdx) pra (toDia,toIdx) - usado pelo arrastar-e-soltar.
+function moveCalendarBlock(fromDia, fromIdx, toDia, toIdx){
+  const c = ensureCalendarioDefaults();
+  const origem = c.blocos[fromDia];
+  if(!origem || !origem[fromIdx]) return;
+  const bloco = origem.splice(fromIdx,1)[0];
+  const destino = c.blocos[toDia];
+  let insertAt = toIdx;
+  if(fromDia===toDia && fromIdx<toIdx) insertAt--; // remocao no mesmo dia desloca os indices depois
+  insertAt = Math.max(0, Math.min(insertAt, destino.length));
+  destino.splice(insertAt, 0, bloco);
+  save();
+}
+// Ref do bloco do calendario que originou a sessao ativa (se houver) - lida/zerada em
+// endActiveSession/cancelActiveSession, pra marcar o bloco certo como concluido quando a
+// sessao termina de verdade.
+let activeSessionCalendarRef = null;
+// Clique num bloco: abre o fluxo normal de iniciar cronometro (mesmo do "Puxar sessão
+// agora"), so que marcado com a origem do bloco - ver openStartSessionModal/endActiveSession.
+function abrirSessaoBloco(dia, idx){
+  const c = ensureCalendarioDefaults();
+  const bloco = c.blocos[dia] && c.blocos[dia][idx];
+  if(!bloco) return;
+  if(bloco.done){ toast('Esse bloco já foi concluído.'); return; }
+  if(!isSubjectActive(bloco.si)){ toast('Essa matéria foi removida do ciclo - edite a semana em "Recalcular".'); return; }
+  openStartSessionModal(bloco.si, proximaAulaPendenteMateria(bloco.si), { dia, idx });
+}
+function formatarIntervaloSemana(segundaStr){
+  const seg = new Date(segundaStr+'T00:00:00');
+  const dom = new Date(seg); dom.setDate(dom.getDate()+6);
+  const fmt = (d)=> d.toLocaleDateString('pt-BR', { day:'2-digit', month:'short' });
+  return 'Semana de '+fmt(seg)+' a '+fmt(dom);
+}
+
 /* ===================== CATÁLOGO CENTRAL DE MÉTRICAS ===================== */
 // Fonte única de verdade: alimenta os tooltips (ⓘ) e a lista de widgets do
 // dashboard customizável, para nunca precisar manter duas listas em paralelo.
@@ -3925,12 +4136,16 @@ const EXTRA_TIPS = {
   analise_desempenho: {
     titulo: 'Análise de desempenho por matéria',
     tooltip: 'Compara sua taxa de acerto mais recente (últimos 30 dias) com a de um período igual imediatamente anterior, matéria por matéria — é a sua própria evolução, não uma comparação com outros usuários. "Diferença" e o gráfico mostram se você melhorou (verde) ou piorou (laranja) em cada uma. Questões, Acertos e Taxa de acertos somam todo o histórico; já a comparação de período só aparece depois que você tiver respostas suficientes nas duas janelas de 30 dias.'
+  },
+  calendario_semana: {
+    titulo: 'Calendário da semana',
+    tooltip: 'Pega a meta de horas de cada matéria no Ciclo e distribui em blocos de 30min ao longo dos 7 dias. Cada semana nova é montada olhando o que ainda falta de verdade (o déficit de cada matéria) — então o que não foi estudado numa semana automaticamente puxa mais blocos na semana seguinte, sem nunca passar do total que falta no ciclo. Arraste um bloco pra outro dia ou posição pra reorganizar sua semana. Toque num bloco pra iniciar o cronômetro daquela matéria — ele vira concluído sozinho quando a sessão termina. O botão de recarregar recalcula a semana atual do zero, a partir do déficit e dos pesos de agora (isso descarta os arrastos manuais feitos nela).'
   }
 };
 // Conteúdo da central de ajuda (Ajustes > Tutoriais) - explicações curtas de como cada
 // parte do app funciona, em formato de acordeão (mesma ideia do subj-block de Matérias).
 const TUTORIAIS = [
-  { titulo:'Como funciona o Ciclo de Estudos', texto:'Você define quantas horas quer estudar por semana; o app sugere um peso pra cada matéria com base no que falta ler, e monta uma sequência que se repete. Ao completar a sequência inteira, um novo ciclo começa. Ajuste os pesos e quais matérias entram a qualquer momento em Ciclo → Replanejar.' },
+  { titulo:'Como funciona o Ciclo de Estudos', texto:'Você define quantas horas quer estudar por semana; o app sugere um peso pra cada matéria com base no que falta ler, e monta uma sequência que se repete. Ao completar a sequência inteira, um novo ciclo começa. Ajuste os pesos e quais matérias entram a qualquer momento em Ciclo → Replanejar. O Calendário da semana (mesma aba) mostra essa meta já dividida em blocos de 30min pelos 7 dias, que você pode arrastar pra reorganizar.' },
   { titulo:'Como funciona a Revisão espaçada', texto:'Ao concluir a teoria de uma apostila, a primeira tarefa é fazer os exercícios dela, em até 48 horas — essa etapa se fecha sozinha quando você responde todas as questões da aula. Só então entram as 3 revisões espaçadas (padrão 7 → 15 → 30 dias), e o app já mostra todas as datas previstas no calendário. A avaliação Difícil / Médio / Fácil é só um registro: não muda o intervalo. Em "Escolher o que revisar" você filtra pelas aulas que marcou como difíceis e revisa manualmente quando quiser. Os intervalos podem ser personalizados por matéria — ao mudar, as datas já agendadas são recalculadas na hora.' },
   { titulo:'Refazer erradas x Favoritos', texto:'Refazer junta automaticamente toda questão que você já errou e ainda não domina — sai da lista sozinha quando você acerta. Favoritos é uma lista manual: você escolhe (<svg class=ic-svg aria-hidden=true><use href=#ic-star></use></svg> durante o quiz) o que quer guardar pra rever depois, tenha acertado ou errado.' },
   { titulo:'Taxa de Domínio x Taxa geral', texto:'Taxa de Domínio conta questões distintas: uma vez que você acerta, ela fica "dominada" pra sempre, mesmo que erre de novo depois — por isso só sobe, e é a melhor forma de acompanhar evolução real. A Taxa geral por tentativa soma todas as tentativas (inclusive repetidas) e pode cair mesmo você progredindo, porque você revisa mais as que errou.' },
@@ -3945,7 +4160,7 @@ const MANUAL_CATALOG = [
   { titulo:'Matérias', texto:'Lista todas as matérias do edital com suas aulas/apostilas. Cada matéria mostra o progresso de leitura da teoria e a taxa de domínio das questões. Abra uma matéria pra ver aula por aula, abrir a apostila em PDF, marcar teoria como lida e responder as questões daquela aula.' },
   { titulo:'Questões', texto:'Central de prática: responda questões de todas as matérias ativas de uma vez, ou filtre por uma matéria específica ou por uma apostila (aula) específica. Toda resposta dada por aqui conta igualmente pros seus índices de progresso e taxa de domínio, independente de por onde você entrou no quiz.' },
   { titulo:'Tempo', texto:'Cronômetro de sessão de estudo, com modo livre ou Pomodoro (foco + intervalo, configurável em Ajustes → Sessão de estudo). Registra quanto tempo você estudou, pra alimentar as estimativas de ritmo e ajudar a bater sua meta semanal.' },
-  { titulo:'Ciclo', texto:'Monte um ciclo de estudos: defina quantas horas por semana pretende estudar e o app sugere um peso pra cada matéria (proporcional ao que falta ler), distribuindo as horas numa sequência que se repete. Ajuste pesos e quais matérias entram em "Replanejar" a qualquer momento — o ciclo se recalcula na hora.' },
+  { titulo:'Ciclo', texto:'Monte um ciclo de estudos: defina quantas horas por semana pretende estudar e o app sugere um peso pra cada matéria (proporcional ao que falta ler), distribuindo as horas numa sequência que se repete. Ajuste pesos e quais matérias entram em "Replanejar" a qualquer momento — o ciclo se recalcula na hora. O card "Calendário da semana" mostra essa meta em blocos de 30min pelos 7 dias — arraste um bloco pra outro dia/posição pra reorganizar, ou toque nele pra iniciar o cronômetro direto (ele vira concluído sozinho ao encerrar a sessão). Cada semana nova é montada a partir do que ainda falta de verdade: o que não foi estudado puxa mais blocos na semana seguinte, sem nunca passar do total do ciclo. Em Replanejar dá pra configurar o peso de cada dia (0 pra não estudar naquele dia).' },
   { titulo:'Refazer', texto:'Junta automaticamente toda questão que você já errou e ainda não acertou depois — sai da lista sozinha assim que você acerta. É o jeito mais rápido de focar exatamente no que você ainda não domina, sem precisar procurar manualmente.' },
   { titulo:'Revisão', texto:'Agenda de revisão espaçada: depois de estudar a teoria de uma aula e fazer os exercícios dela (em até 48h), o app agenda 3 revisões espaçadas (padrão 7 → 15 → 30 dias, editável por matéria). O calendário mostra o que está atrasado, hoje e programado; "Escolher o que revisar" deixa rever qualquer aula já concluída fora do cronograma, inclusive filtrando pelas que você marcou como difíceis.' },
   { titulo:'Provas', texto:'Cadernos oficiais de concursos anteriores (CESGRANRIO), com gabarito oficial. Faça a prova inteira cronometrada como simulado, ou pratique só as questões de uma matéria específica dentro daquele caderno.' },
@@ -8011,7 +8226,7 @@ document.querySelectorAll('#stovModes .stov-mode-btn').forEach(btn=>{
   });
 });
 
-function openStartSessionModal(si, ai){
+function openStartSessionModal(si, ai, calendarRef){
   if(state.activeSession){ toast('Encerre a sessão em andamento antes de iniciar outra.'); return; }
   const body = document.getElementById('startSessionBody');
   let tipoSel = 'teoria';
@@ -8033,7 +8248,7 @@ function openStartSessionModal(si, ai){
     });
   });
   document.getElementById('startSessionGo').addEventListener('click', ()=>{
-    startSession(si, ai, tipoSel);
+    if(startSession(si, ai, tipoSel)) activeSessionCalendarRef = calendarRef || null;
     closeStartSessionModal();
     renderTimerBar(); // abre a tela central do cronômetro (experiência principal)
     renderAll();
@@ -8582,6 +8797,7 @@ function renderPlanejamento(){
   renderCicloAvisoAjuste();
   renderCicloHistorico();
   renderCicloHeatmap();
+  renderCalendario();
 }
 document.getElementById('btnCriarCiclo').addEventListener('click', ()=>{
   const horas = parseFloat(document.getElementById('cicloSetupHoras').value)||20;
@@ -8620,7 +8836,15 @@ function openReplanCicloModal(){
   // Enquanto nao for sobrescrito, o peso mostrado/salvo continua sendo o sugerido (dinamico).
   const overrideState = {};
   SUBJECTS.forEach((s,si)=>{ overrideState[si] = c.pesos[si]!=null; });
+  const calC = ensureCalendarioDefaults();
   let html = `<div class="form-row"><label>Horas de estudo por semana</label><input type="number" id="replanHoras" min="1" max="100" value="${c.horasPorSemana}"></div>`;
+  html += `<div class="form-row"><label>Dias de estudo no Calendário ${tipIcon('calendario_semana')}</label></div>`;
+  html += `<div class="cal-dias-cfg">` + DIAS_SEMANA.map(d=>`
+    <div class="cal-dia-cfg-item">
+      <span>${DIAS_SEMANA_LABEL[d]}</span>
+      <input type="number" min="0" max="24" step="0.5" class="replan-dia-peso" data-dia="${d}" value="${calC.diasPeso[d]}">
+    </div>`).join('') + `</div>`;
+  html += `<div class="empty" style="padding:0 0 10px; text-align:left;">Peso relativo de cada dia na distribuição dos blocos de 30min da semana — deixe 0 num dia pra não estudar nele. Vale a partir da próxima semana gerada (ou toque em "Recalcular" no card do Calendário pra aplicar já na semana atual).</div>`;
   html += `<div class="form-row"><label>Matérias no ciclo e peso de cada uma ${tipIcon('peso_ciclo_sugerido')}</label></div>`;
   html += `<div class="empty" style="padding:0 0 10px; text-align:left;">Desmarque uma matéria pra tirá-la do ciclo — ela também some do progresso geral, da Taxa de Domínio geral e de todas as outras métricas "todas as matérias" do app.</div>`;
   html += SUBJECTS.map((s,si)=>{
@@ -8682,11 +8906,153 @@ function openReplanCicloModal(){
       }
     });
     replanejarCiclo(horas, pesos, ativas);
+    const diasPeso = {};
+    body.querySelectorAll('.replan-dia-peso').forEach(inp=>{
+      diasPeso[inp.dataset.dia] = Math.max(0, Number(inp.value)||0);
+    });
+    ensureCalendarioDefaults().diasPeso = diasPeso;
+    save();
     document.getElementById('replanCicloOverlay').classList.remove('show');
     renderAll();
     toast('Ciclo replanejado.');
   });
   document.getElementById('replanCicloOverlay').classList.add('show');
+}
+
+/* ===================== RENDER: CALENDÁRIO DA SEMANA ===================== */
+function renderCalendario(){
+  const grid = document.getElementById('calGrid');
+  if(!grid) return;
+  document.getElementById('tipCalendarioSemana').innerHTML = tipIcon('calendario_semana');
+  wireTooltips(document.getElementById('view-planejamento'));
+  checkCalendarioRollover();
+  const c = ensureCalendarioDefaults();
+  document.getElementById('calSemanaLabel').textContent = c.semanaRef ? formatarIntervaloSemana(c.semanaRef) : '';
+  const hojeSeg = segundaFeiraDe(todayStr());
+  const hojeIdxSemana = Math.round((new Date(todayStr()+'T00:00:00') - new Date(hojeSeg+'T00:00:00'))/86400000); // 0=seg..6=dom
+
+  if(!state.ciclo || !state.ciclo.horasPorSemana){
+    grid.innerHTML = `<div class="empty">Crie um ciclo de estudos (acima) pra gerar o calendário da semana automaticamente.</div>`;
+    return;
+  }
+  const semVazia = DIAS_SEMANA.every(d=> (c.blocos[d]||[]).length===0);
+  if(semVazia){
+    grid.innerHTML = `<div class="empty">Nenhuma matéria com déficit ou peso no ciclo agora — ajuste em "Replanejar" pra gerar a semana.</div>`;
+    return;
+  }
+  grid.innerHTML = DIAS_SEMANA.map((d,di)=>{
+    const blocos = c.blocos[d]||[];
+    const feitos = blocos.filter(b=>b.done).length;
+    const dataDia = new Date(hojeSeg+'T00:00:00'); dataDia.setDate(dataDia.getDate()+di);
+    const corpo = blocos.length===0
+      ? `<div class="cal-day-empty">livre</div>`
+      : blocos.map((b,idx)=>{
+          const ativa = isSubjectActive(b.si);
+          return `<div class="cal-block${b.done?' done':''}${ativa?'':' inativa'}" data-dia="${d}" data-idx="${idx}" data-si="${b.si}" style="--mat-cor:${subjectColor(b.si)}">
+            <span class="cal-block-nm">${escapeHtml(SUBJECTS[b.si].name)}</span>
+            ${b.done?'<svg class=ic-svg aria-hidden=true><use href=#ic-check></use></svg>':''}
+          </div>`;
+        }).join('');
+    return `<div class="cal-day-col${di===hojeIdxSemana?' hoje':''}" data-dia="${d}">
+      <div class="cal-day-hd">
+        <div class="nm">${DIAS_SEMANA_LABEL[d]}</div>
+        <div class="dt">${String(dataDia.getDate()).padStart(2,'0')}/${String(dataDia.getMonth()+1).padStart(2,'0')}</div>
+        ${blocos.length? `<div class="pg">${feitos}/${blocos.length}</div>` : ''}
+      </div>
+      ${corpo}
+    </div>`;
+  }).join('');
+  wireCalendarDrag(grid);
+}
+document.getElementById('btnCalRecalcular').addEventListener('click', ()=>{
+  if(!confirm('Isso recalcula a semana atual do zero, a partir do déficit e pesos de agora — os arrastos manuais feitos nela se perdem. Continuar?')) return;
+  gerarSemanaCalendario(true);
+  renderCalendario();
+  toast('Semana recalculada.');
+});
+// Arrastar-e-soltar dos blocos de 30min, via Pointer Events (funciona igual com mouse,
+// caneta e toque). Um toque curto sem arrastar (movimento < THRESH) conta como clique
+// normal e abre a sessão daquele bloco - ver abrirSessaoBloco.
+function wireCalendarDrag(grid){
+  const THRESH = 6;
+  let drag = null;
+  function limparIndicadores(){
+    grid.querySelectorAll('.cal-day-col.cal-drop-hover').forEach(el=>el.classList.remove('cal-drop-hover'));
+    grid.querySelectorAll('.cal-block.cal-drop-before,.cal-block.cal-drop-after').forEach(el=>el.classList.remove('cal-drop-before','cal-drop-after'));
+  }
+  grid.querySelectorAll('.cal-block').forEach(el=>{
+    el.addEventListener('pointerdown', (e)=>{
+      if(e.button!=null && e.button!==0) return;
+      const rect = el.getBoundingClientRect();
+      drag = {
+        el, fromDia: el.dataset.dia, fromIdx: parseInt(el.dataset.idx,10),
+        startX: e.clientX, startY: e.clientY, moved:false,
+        offX: e.clientX-rect.left, offY: e.clientY-rect.top, width: rect.width,
+        toDia:null, toIdx:null, ghost:null,
+      };
+      try{ el.setPointerCapture(e.pointerId); }catch(err){}
+    });
+    el.addEventListener('pointermove', (e)=>{
+      if(!drag || drag.el!==el) return;
+      const dx = e.clientX-drag.startX, dy = e.clientY-drag.startY;
+      if(!drag.moved && Math.hypot(dx,dy)>THRESH){
+        drag.moved = true;
+        el.classList.add('cal-dragging');
+        const ghost = el.cloneNode(true);
+        ghost.classList.add('cal-drag-ghost');
+        ghost.style.width = drag.width+'px';
+        document.body.appendChild(ghost);
+        drag.ghost = ghost;
+      }
+      if(!drag.moved) return;
+      drag.ghost.style.left = (e.clientX-drag.offX)+'px';
+      drag.ghost.style.top = (e.clientY-drag.offY)+'px';
+      el.style.pointerEvents = 'none';
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      el.style.pointerEvents = '';
+      limparIndicadores();
+      const col = under && under.closest ? under.closest('.cal-day-col') : null;
+      if(col){
+        col.classList.add('cal-drop-hover');
+        const alvo = under.closest('.cal-block');
+        if(alvo && alvo!==el){
+          const r = alvo.getBoundingClientRect();
+          const antes = e.clientY < r.top+r.height/2;
+          alvo.classList.add(antes?'cal-drop-before':'cal-drop-after');
+          drag.toDia = col.dataset.dia;
+          drag.toIdx = parseInt(alvo.dataset.idx,10) + (antes?0:1);
+        } else {
+          drag.toDia = col.dataset.dia;
+          drag.toIdx = col.querySelectorAll('.cal-block').length;
+        }
+      } else {
+        drag.toDia = null; drag.toIdx = null;
+      }
+    });
+    function soltar(e){
+      if(!drag || drag.el!==el) return;
+      const wasDrag = drag.moved;
+      const { fromDia, fromIdx, toDia, toIdx } = drag;
+      if(drag.ghost) drag.ghost.remove();
+      el.classList.remove('cal-dragging');
+      limparIndicadores();
+      drag = null;
+      if(wasDrag){
+        if(toDia!=null) moveCalendarBlock(fromDia, fromIdx, toDia, toIdx);
+        renderCalendario();
+      } else {
+        abrirSessaoBloco(fromDia, fromIdx);
+      }
+    }
+    el.addEventListener('pointerup', soltar);
+    el.addEventListener('pointercancel', ()=>{
+      if(!drag || drag.el!==el) return;
+      if(drag.ghost) drag.ghost.remove();
+      el.classList.remove('cal-dragging');
+      limparIndicadores();
+      drag = null;
+    });
+  });
 }
 
 /* ===================== RENDER ALL ===================== */
