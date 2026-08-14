@@ -1625,60 +1625,30 @@
   .ciclo-seq-row .chev{font-size:1rem; color:var(--text-mut);}
   .ciclo-seq-move{display:flex; flex-direction:column; gap:3px;}
   .ciclo-seq-move button{width:26px; height:22px; border-radius:6px; border:1px solid var(--border); background:var(--bg); font-size:.7rem; color:var(--text);}
-  /* "Puxar sessão agora" — leva de melhorias da tela do Ciclo (ago/2026). Único botão do
-     app com fundo --acido cheio (fora de badge/marca-texto): é a ação de maior destaque
-     da tela, então usa o acento sozinho, sem competir com o oxido do resto da UI.
-     Texto usa --on-acido (declarado no body, nunca em :root — ver regra crítica do
-     redesign) porque o par de contraste validado muda de ink pra papel-dark entre os
-     temas claro/escuro (ver design/contraste.mjs). */
-  .ciclo-puxar{margin-bottom:14px;}
-  .ciclo-puxar-sub{font-size:.8rem; color:var(--text-mut); margin-bottom:10px; line-height:1.45;}
-  /* Segunda tentativa: um botão só (sempre a matéria mais atrasada, sem opção de troca)
-     foi rejeitado — "não consigo escolher a matéria". Agora é uma lista: cada matéria
-     atrasada vira uma linha clicável, com a cor que já a identifica no resto do app
-     (subjectColor), ordenada da mais pra menos atrasada. A pior ganha leve destaque
-     (.pior) pra continuar óbvio qual é a prioridade, sem ser a ÚNICA opção clicável. */
-  #cicloPuxarLista{display:flex; flex-direction:column; gap:8px;}
-  .ciclo-puxar-row{
-    --mat-cor: var(--green);
-    display:flex; align-items:center; gap:10px; width:100%; text-align:left;
-    border:1px solid var(--border); border-radius:10px;
-    background:var(--bg); color:var(--text); padding:11px 14px; cursor:pointer;
-    font:inherit; font-size:.85rem;
-  }
-  .ciclo-puxar-row:hover{background:color-mix(in srgb, var(--mat-cor) 10%, var(--bg));}
-  .ciclo-puxar-row.pior{background:color-mix(in srgb, var(--mat-cor) 14%, var(--bg)); border-color:var(--mat-cor);}
-  .ciclo-puxar-row .swatch{width:9px; height:9px; border-radius:50%; background:var(--mat-cor); flex-shrink:0;}
-  .ciclo-puxar-row svg{width:16px; height:16px; color:var(--mat-cor); flex-shrink:0;}
-  .ciclo-puxar-row .nm{flex:1; font-weight:700;}
-  .ciclo-puxar-row .nm small{display:block; font-weight:400; color:var(--text-mut); font-size:.74rem; margin-top:2px;}
-  .ciclo-puxar-row .def{font-size:.72rem; color:var(--text-mut); white-space:nowrap; font-family:'Courier Prime',ui-monospace,monospace;}
-  .ciclo-puxar-row.pior .def{font-weight:700; color:var(--mat-cor);}
-
   /* ---- Calendário da semana (Ciclo) ---- */
   /* Grid de 7 colunas ocupando a largura toda (sem scroll horizontal) - materias com nome
      longo quebram linha e a caixa cresce em altura pra caber o nome inteiro, em vez de cortar. */
-  .cal-grid{display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:4px;}
-  .cal-day-col{min-height:56px; background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:6px 3px; transition:background .12s ease, border-color .12s ease; min-width:0;}
+  .cal-grid{display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:5px;}
+  .cal-day-col{min-height:76px; background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:8px 4px; transition:background .12s ease, border-color .12s ease; min-width:0;}
   .cal-day-col.hoje{border-color:var(--green); box-shadow:inset 0 0 0 1px var(--green);}
   .cal-day-col.cal-drop-hover{background:color-mix(in srgb, var(--green) 10%, var(--bg));}
-  .cal-day-hd{text-align:center; margin-bottom:6px;}
-  .cal-day-hd .nm{font-size:.66rem; font-weight:800; color:var(--text);}
-  .cal-day-hd .dt{font-size:.56rem; color:var(--text-mut);}
-  .cal-day-hd .pg{font-size:.56rem; color:var(--text-mut); margin-top:1px;}
-  .cal-day-empty{font-size:.58rem; color:var(--text-mut); text-align:center; padding:8px 1px; opacity:.7;}
+  .cal-day-hd{text-align:center; margin-bottom:8px;}
+  .cal-day-hd .nm{font-size:.82rem; font-weight:800; color:var(--text);}
+  .cal-day-hd .dt{font-size:.68rem; color:var(--text-mut);}
+  .cal-day-hd .pg{font-size:.68rem; color:var(--text-mut); margin-top:2px;}
+  .cal-day-empty{font-size:.7rem; color:var(--text-mut); text-align:center; padding:10px 1px; opacity:.7;}
   .cal-block{
     --mat-cor:#ccc;
     background:color-mix(in srgb, var(--mat-cor) 22%, var(--card));
-    border-left:3px solid var(--mat-cor);
-    border-radius:7px; padding:5px 5px; margin-bottom:5px; font-size:.6rem; font-weight:700; color:var(--text);
+    border-left:4px solid var(--mat-cor);
+    border-radius:8px; padding:9px 8px; margin-bottom:7px; font-size:.76rem; font-weight:700; color:var(--text);
     cursor:grab; touch-action:none; user-select:none; -webkit-user-select:none;
-    display:flex; flex-direction:column; align-items:flex-start; gap:3px;
+    display:flex; flex-direction:column; align-items:flex-start; gap:4px;
     transition:opacity .12s ease, border-top-width .1s ease, border-bottom-width .1s ease;
   }
-  .cal-block .cal-block-nm{white-space:normal; word-break:break-word; overflow-wrap:anywhere; line-height:1.2;}
-  .cal-block .cal-block-dur{font-size:.52rem; font-weight:600; color:var(--text-mut); opacity:.85;}
-  .cal-block svg{width:11px; height:11px; flex-shrink:0; color:var(--mat-cor);}
+  .cal-block .cal-block-nm{white-space:normal; word-break:break-word; overflow-wrap:anywhere; line-height:1.25;}
+  .cal-block .cal-block-dur{font-size:.66rem; font-weight:600; color:var(--text-mut); opacity:.85;}
+  .cal-block svg{width:13px; height:13px; flex-shrink:0; color:var(--mat-cor);}
   .cal-block.done{opacity:.55; cursor:default;}
   .cal-block.inativa{opacity:.4; text-decoration:line-through;}
   .cal-block.cal-dragging{opacity:.35;}
@@ -2115,18 +2085,10 @@
     <div id="cicloMain" style="display:none;">
       <div id="cicloAvisoAjuste"></div>
       <div class="card">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:2px;">
-          <h2 style="margin:0;">Calendário da semana <span id="tipCalendarioSemana"></span></h2>
-          <button class="btn ghost sm" id="btnCalRecalcular" title="Recalcular a semana atual a partir do déficit e pesos de agora"><svg class=ic-svg aria-hidden=true><use href=#ic-restart></use></svg></button>
-        </div>
+        <h2 style="margin:0 0 2px;">Calendário da semana <span id="tipCalendarioSemana"></span></h2>
         <div style="font-size:.74rem; color:var(--text-mut); margin-bottom:10px;" id="calSemanaLabel"></div>
         <div class="cal-grid" id="calGrid"></div>
       </div>
-      <details class="card ciclo-puxar recolhivel">
-        <summary><h2>Puxar sessão agora</h2><span class="marcador" aria-hidden="true"></span></summary>
-        <div class="ciclo-puxar-sub" id="cicloPuxarSub"></div>
-        <div id="cicloPuxarLista"></div>
-      </details>
       <div class="ciclo-actions">
         <button class="btn ghost sm" id="btnCicloRecomecar"><svg class=ic-svg aria-hidden=true><use href=#ic-restart></use></svg> Recomeçar</button>
         <button class="btn ghost sm" id="btnCicloReplanejar"><svg class=ic-svg aria-hidden=true><use href=#ic-pencil></use></svg> Replanejar</button>
@@ -3203,7 +3165,7 @@ function endActiveSession(extra){
   state.activeSession = null;
   // Se essa sessao nasceu de um clique num bloco do Calendario da Semana, marca aquele
   // bloco especifico como concluido - MAS so se o tempo liquido bateu a duracao cheia do
-  // bloco (30 ou 45min - ver duracaoMin/construirItensMateria) numa unica sessao. Encerrou antes da hora: o bloco
+  // bloco (30 ou 45min - ver duracaoMin/decomporMateriaEmItens) numa unica sessao. Encerrou antes da hora: o bloco
   // continua em aberto (o usuario pode clicar nele de novo depois pra tentar bater o tempo
   // completo; nao acumula tempo parcial entre sessoes diferentes - de proposito, pra manter
   // simples). Isso so afeta a marcacao visual "concluido" do bloco - o tempo estudado, mesmo
@@ -3850,34 +3812,10 @@ function checkCicloCompletion(){
     toast(' Ciclo completo! Um novo ciclo foi iniciado.');
   }
 }
-// Matéria mais atrasada do ciclo atual: maior déficit (meta - estudado) entre as ativas com
-// peso > 0. null se o ciclo está em dia (nenhuma com déficit) ou não configurado — usado pelo
-// botão "Puxar sessão agora" (ver puxarSessaoAgora).
-function materiaMaisAtrasadaCiclo(){
-  const lista = materiasAtrasadasCiclo();
-  return lista.length? lista[0].si : null;
-}
-// Todas as matérias atrasadas do ciclo atual, não só a pior — usadas pela lista de
-// escolha do "Puxar sessão agora" (feedback: um botão só, sem poder escolher, era
-// ruim). Ordenadas da mais atrasada pra menos atrasada.
-function materiasAtrasadasCiclo(){
-  const c = state.ciclo;
-  if(!c || !c.horasPorSemana) return [];
-  const out = [];
-  SUBJECTS.forEach((s,si)=>{
-    if(!isSubjectActive(si)) return;
-    const meta = cicloMetaSegundos(si);
-    if(meta<=0) return;
-    const deficit = meta - cicloEstudadoSegundos(si);
-    if(deficit>0) out.push({si, deficit});
-  });
-  out.sort((a,b)=>b.deficit-a.deficit);
-  return out;
-}
 // Próxima aula não concluída de uma matéria, na mesma ordem em que aparecem na apostila (a
 // ordem que a navegação normal por Matérias usa). Se todas já estiverem concluídas, cai na
-// última — não deveria acontecer pra quem está atrasado no ciclo (déficit de horas com todas
-// as aulas dadas por estudadas seria só tempo de questões/revisão, não de teoria pendente).
+// última — usada pelo calendário da semana (ver abrirSessaoBloco) pra saber em qual aula
+// abrir o cronômetro ao clicar num bloco.
 function proximaAulaPendenteMateria(si){
   const s = SUBJECTS[si];
   for(let ai=0; ai<s.aulas.length; ai++){
@@ -3885,17 +3823,6 @@ function proximaAulaPendenteMateria(si){
     if(!rec || !rec.studied) return ai;
   }
   return s.aulas.length-1;
-}
-// Botão "Puxar sessão agora" (tela do Ciclo): identifica a matéria mais atrasada e abre
-// direto o fluxo de início de sessão nela — pula a navegação manual por Matérias > aula >
-// Iniciar cronômetro. Sem matéria atrasada (ciclo em dia ou completo), não faz nada; o botão
-// já aparece desabilitado nesse caso (ver renderPlanejamento).
-// Aceita um si explícito (usuário escolheu na lista); sem argumento, cai na mais
-// atrasada — mantém o clique direto no botão de topo funcionando como antes.
-function puxarSessaoAgora(si){
-  if(si==null) si = materiaMaisAtrasadaCiclo();
-  if(si==null) return;
-  openStartSessionModal(si, proximaAulaPendenteMateria(si));
 }
 
 /* ===================== CALENDÁRIO DA SEMANA (Ciclo) =====================
@@ -3905,15 +3832,19 @@ function puxarSessaoAgora(si){
    pro mesmo motor (peso, meta, estudado, déficit). Guardado em state.calendario.
 
    Geração da semana: em vez de repetir sempre a mesma meta bruta por matéria, cada
-   semana nasce olhando o DÉFICIT atual (cicloMetaSegundos - cicloEstudadoSegundos,
-   igual materiasAtrasadasCiclo). Isso resolve sozinho a regra de "o que não foi
-   estudado empurra pra semana seguinte": matéria que ficou pra trás numa semana
-   automaticamente puxa mais blocos na próxima, porque o déficit dela continua alto;
-   matéria em dia recebe proporcionalmente menos. Nunca ultrapassa o total real que
-   falta no ciclo, porque déficit tem teto = meta. Uma vez gerada, a semana NÃO se
-   regenera sozinha em cada render (isso apagaria os arrastos manuais do usuário) —
-   só quando a segunda-feira vira (checkCalendarioRollover) ou quando o usuário pede
-   explicitamente (botão "Recalcular"). */
+   semana nasce olhando o DÉFICIT atual (cicloMetaSegundos - cicloEstudadoSegundos) de
+   cada matéria ativa. Isso resolve sozinho a regra de "o que não foi estudado empurra
+   pra semana seguinte": matéria que ficou pra trás numa semana automaticamente puxa
+   mais blocos na próxima, porque o déficit dela continua alto; matéria em dia recebe
+   proporcionalmente menos. O total da semana sempre fecha exatamente em
+   horasPorSemana - nenhuma matéria individual passa do seu próprio déficit (nunca
+   aloca mais do que falta pra ela), mas a sobra de quem tem pouco déficit é
+   redistribuída pras que ainda precisam (ver distribuirComTeto), em vez de encolher a
+   semana. Só quando a soma de TODOS os déficits do ciclo for menor que
+   horasPorSemana (ciclo perto de fechar) a semana fica mesmo mais curta - não tem
+   como inventar trabalho que não existe. Uma vez gerada, a semana NÃO se regenera
+   sozinha em cada render (isso apagaria os arrastos manuais do usuário) - só quando a
+   segunda-feira vira (ver checkCalendarioRollover). */
 const DIAS_SEMANA = ['seg','ter','qua','qui','sex','sab','dom'];
 const DIAS_SEMANA_LABEL = { seg:'Seg', ter:'Ter', qua:'Qua', qui:'Qui', sex:'Sex', sab:'Sáb', dom:'Dom' };
 // Segunda-feira (YYYY-MM-DD) da semana que contém dataStr.
@@ -3954,23 +3885,50 @@ function distribuirInteiros(pesos, total){
   chaves.forEach(k=> out[k]=info[k].inteiro);
   return out;
 }
-// Converte a quantidade de blocos de 30min que uma matéria recebeu na semana (unidades30)
-// numa lista de ITENS pra intercalar. Todo bloco é de 30min ou 45min - nunca 15 nem 60. Por
-// padrão os blocos de 30min vêm agrupados em PARES (2 blocos de 30min da mesma matéria, lado
-// a lado = 1h). O déficit real da matéria pode não fechar num múltiplo de 30min - o Ciclo já
-// trabalha com incrementos de 15min (ver arredondar15min/cicloMetaSegundos) - então, quando
-// sobra uma fração de 15min, ela é absorvida por UM dos blocos de 30min, que vira 45min em vez
-// de existir um bloco avulso de 15min. Como todo múltiplo de 15min a partir de 30 pode ser
-// escrito como soma de 30s e no máximo um 45 (30a+45 ou só 30s), isso sempre fecha o tempo
-// exato da matéria, sem arredondar. Nunca aloca mais tempo do que realmente falta.
-function construirItensMateria(si, unidades30){
-  if(unidades30<=0) return [];
-  let minutosTotal = unidades30*30;
-  const deficitReal = Math.max(0, cicloMetaSegundos(si)-cicloEstudadoSegundos(si));
-  if(deficitReal>0){
-    const deficitMin = arredondar15min(deficitReal)/60; // sempre multiplo de 15, piso 30
-    if(deficitMin < minutosTotal) minutosTotal = deficitMin;
+// Igual distribuirInteiros, mas cada chave tem um TETO (tetos[chave]) que a distribuicao
+// proporcional nunca pode ultrapassar. Quando a cota proporcional de uma chave bateria no
+// teto dela, ela e travada exatamente no teto e o que sobra e redistribuido, proporcionalmente,
+// entre as chaves que ainda nao bateram teto - repete ate estabilizar (no maximo uma rodada
+// por chave). Sempre fecha em exatamente `total`, A MENOS que a soma de todos os tetos seja
+// menor que `total` - nesse caso fecha na soma dos tetos (o maximo fisicamente possivel), sem
+// inventar mais do que existe. E o que garante que o Calendario da semana bate exatamente com
+// horasPorSemana do Ciclo sempre que houver déficit suficiente pra preencher, mesmo com
+// matérias que estão perto de terminar (déficit pequeno) puxando a sobra pras outras.
+function distribuirComTeto(pesos, tetos, total){
+  let pesosAtivos = Object.assign({}, pesos);
+  const fixado = {};
+  let orcamento = total;
+  const maxIter = Object.keys(pesos).length + 1;
+  for(let iter=0; iter<maxIter; iter++){
+    const chaves = Object.keys(pesosAtivos);
+    if(chaves.length===0 || orcamento<=0) break;
+    const dist = distribuirInteiros(pesosAtivos, orcamento);
+    let travouAlguma = false;
+    chaves.forEach(k=>{
+      const teto = tetos[k];
+      if(teto!=null && dist[k]>teto){
+        fixado[k] = teto;
+        orcamento -= teto;
+        delete pesosAtivos[k];
+        travouAlguma = true;
+      }
+    });
+    if(!travouAlguma){
+      chaves.forEach(k=>{ fixado[k]=dist[k]; });
+      break;
+    }
   }
+  return fixado;
+}
+// Converte os minutos totais que uma matéria recebeu na semana numa lista de ITENS pra
+// intercalar. Todo bloco é de 30min ou 45min - nunca 15 nem 60. Por padrão os blocos de 30min
+// vêm agrupados em PARES (2 blocos de 30min da mesma matéria, lado a lado = 1h). Quando os
+// minutos não fecham num múltiplo de 30 (o Ciclo trabalha com incrementos de 15min - ver
+// arredondar15min/cicloMetaSegundos), a fração de 15min é absorvida por UM dos blocos de
+// 30min, que vira 45min em vez de existir um bloco avulso de 15min. Como todo múltiplo de
+// 15min a partir de 30 pode ser escrito como soma de 30s e no máximo um 45, isso sempre fecha
+// o tempo exato, sem arredondar.
+function decomporMateriaEmItens(si, minutosTotal){
   if(minutosTotal<=0) return [];
   const temBloco45 = (minutosTotal%30)>0; // sobra 15min - um bloco de 30 vira 45 pra absorver
   let blocos30 = Math.floor(minutosTotal/30) - (temBloco45?1:0);
@@ -3982,9 +3940,9 @@ function construirItensMateria(si, unidades30){
   return itens;
 }
 // Intercala os itens (pares de 30min, avulsos de 30min ou o bloco de 45min - ver
-// construirItensMateria) numa sequência única, proporcional ao total de MINUTOS de cada
-// matéria - round-robin ponderado,
-// pra não empilhar várias matérias diferentes seguidas na semana. Um par nunca é quebrado em
+// decomporMateriaEmItens) numa sequência única, proporcional ao total de MINUTOS de cada
+// matéria - round-robin ponderado, pra não empilhar várias matérias diferentes seguidas na
+// semana. Um par nunca é quebrado em
 // dois itens da sequência (fica sempre junto, ver gerarSemanaCalendario pro preenchimento por
 // dia).
 function intercalarItensPorMateria(itensPorMateria){
@@ -4021,28 +3979,45 @@ function gerarSemanaCalendario(forcar){
     save();
     return;
   }
-  const totalBlocos = Math.max(0, Math.round(cc.horasPorSemana*2)); // unidades de 30min na semana toda
+  const totalBlocos = Math.max(0, Math.round(cc.horasPorSemana*2)); // unidades de 30min na semana toda (soh usado pra capacidade dos dias)
+  const totalUnid15 = Math.max(0, Math.round(cc.horasPorSemana*4)); // unidades de 15min na semana toda (granularidade fina do teto por materia)
   // Base de distribuicao entre materias: deficit atual (o que "empurra" pendencia pra
   // frente); se ninguem tem deficit (ciclo em dia/quase fechando), cai pro peso normal
-  // pra semana nao ficar vazia bem no fim do ciclo.
+  // pra semana nao ficar vazia bem no fim do ciclo. No ramo de deficit, cada materia tem um
+  // TETO = seu proprio deficit (nunca aloca mais do que falta pra ela), mas a sobra de quem
+  // tem pouco deficit e redistribuida pra quem ainda precisa (distribuirComTeto), entao o
+  // total da semana bate exatamente em horasPorSemana sempre que o deficit total do ciclo
+  // permitir. No ramo de peso (sem deficit em ninguem), nao ha teto - e so a distribuicao
+  // proporcional normal.
   let baseMaterias = {};
+  let temDeficit = false;
   SUBJECTS.forEach((s,si)=>{
     if(!isSubjectActive(si)) return;
     const deficit = Math.max(0, cicloMetaSegundos(si)-cicloEstudadoSegundos(si));
-    if(deficit>0) baseMaterias[si] = deficit;
+    if(deficit>0){ baseMaterias[si] = deficit; temDeficit = true; }
   });
-  if(Object.keys(baseMaterias).length===0){
+  if(!temDeficit){
     SUBJECTS.forEach((s,si)=>{ if(isSubjectActive(si) && getCicloPeso(si)>0) baseMaterias[si]=getCicloPeso(si); });
   }
-  if(Object.keys(baseMaterias).length===0 || totalBlocos<=0){
+  if(Object.keys(baseMaterias).length===0 || totalUnid15<=0){
     DIAS_SEMANA.forEach(d=> c.blocos[d]=[]);
     save();
     return;
   }
-  const blocosPorMateria = distribuirInteiros(baseMaterias, totalBlocos); // unidades de 30min por materia
+  let unid15PorMateria;
+  if(temDeficit){
+    const tetos = {};
+    Object.keys(baseMaterias).forEach(siStr=>{
+      tetos[siStr] = Math.round(arredondar15min(baseMaterias[siStr])/900); // deficit em unidades de 15min
+    });
+    unid15PorMateria = distribuirComTeto(baseMaterias, tetos, totalUnid15);
+  } else {
+    unid15PorMateria = distribuirInteiros(baseMaterias, totalUnid15); // sem teto - so proporcional ao peso
+  }
   const itensPorMateria = {};
-  Object.keys(blocosPorMateria).forEach(siStr=>{
-    const lista = construirItensMateria(Number(siStr), blocosPorMateria[siStr]);
+  Object.keys(unid15PorMateria).forEach(siStr=>{
+    const minutosMateria = unid15PorMateria[siStr]*15;
+    const lista = decomporMateriaEmItens(Number(siStr), minutosMateria);
     if(lista.length) itensPorMateria[siStr] = lista;
   });
   const sequenciaItens = intercalarItensPorMateria(itensPorMateria); // array de {si, qtd, min}
@@ -8844,32 +8819,6 @@ function renderPlanejamento(){
 
   document.getElementById('btnCicloRecomecar').disabled = (estudadoTotal===0);
 
-  // "Puxar sessão agora": lista TODAS as matérias atrasadas, não só a pior — feedback
-  // do botão único era "não consigo escolher a matéria". Cada linha já mostra a
-  // próxima aula pendente daquela matéria e o quanto ela está atrás; clicar nela
-  // chama puxarSessaoAgora(si) direto.
-  const atrasadas = materiasAtrasadasCiclo();
-  const puxarSub = document.getElementById('cicloPuxarSub');
-  const puxarLista = document.getElementById('cicloPuxarLista');
-  if(atrasadas.length===0){
-    puxarSub.textContent = 'Nenhuma matéria atrasada agora — todas estão em dia (ou o ciclo ainda não tem meta configurada).';
-    puxarLista.innerHTML = '';
-  } else {
-    puxarSub.textContent = 'Escolha a matéria para começar — a mais atrasada vem primeiro:';
-    puxarLista.innerHTML = atrasadas.map(({si,deficit},idx)=>{
-      const ai = proximaAulaPendenteMateria(si);
-      return `<button type="button" class="ciclo-puxar-row${idx===0?' pior':''}" data-si="${si}" style="--mat-cor:${subjectColor(si)}">
-        <span class="swatch"></span>
-        <svg class=ic-svg aria-hidden=true><use href=#ic-play></use></svg>
-        <span class="nm">${SUBJECTS[si].name}${idx===0?' <b style="color:var(--mat-cor)">· mais atrasada</b>':''}<small>Aula ${SUBJECTS[si].aulas[ai]}</small></span>
-        <span class="def">faltam ${fmtDuracao(deficit)}</span>
-      </button>`;
-    }).join('');
-    puxarLista.querySelectorAll('.ciclo-puxar-row').forEach(btn=>{
-      btn.addEventListener('click', ()=> puxarSessaoAgora(parseInt(btn.dataset.si,10)));
-    });
-  }
-
   renderCicloSequencia();
   renderCicloAvisoAjuste();
   renderCicloHistorico();
@@ -9029,8 +8978,8 @@ function renderCalendario(){
           // Duas unidades seguidas da mesma materia nasceram como par (default = 1h) - so um
           // detalhe visual (fundem a borda entre elas), cada uma continua sendo um bloco
           // independente pra arrastar/concluir. Blocos de 30min sao o padrao; o rotulo de
-          // duracao so aparece quando o bloco e a fracao de 15min que fecha o tempo exato de
-          // uma materia (ver construirItensMateria).
+          // duracao so aparece quando o bloco e o de 45min que fecha o tempo exato de uma
+          // materia (ver decomporMateriaEmItens).
           const juntaAntes = idx>0 && blocos[idx-1].si===b.si;
           const juntaDepois = idx<blocos.length-1 && blocos[idx+1].si===b.si;
           const joinCls = (juntaAntes?' join-top':'')+(juntaDepois?' join-bottom':'');
@@ -9054,12 +9003,6 @@ function renderCalendario(){
   }).join('');
   wireCalendarDrag(grid);
 }
-document.getElementById('btnCalRecalcular').addEventListener('click', ()=>{
-  if(!confirm('Isso recalcula a semana atual do zero, a partir do déficit e pesos de agora — os arrastos manuais feitos nela se perdem. Continuar?')) return;
-  gerarSemanaCalendario(true);
-  renderCalendario();
-  toast('Semana recalculada.');
-});
 // Arrastar-e-soltar dos blocos de 30min, via Pointer Events (funciona igual com mouse,
 // caneta e toque). Um toque curto sem arrastar (movimento < THRESH) conta como clique
 // normal e abre a sessão daquele bloco - ver abrirSessaoBloco.
