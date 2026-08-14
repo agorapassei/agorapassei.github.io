@@ -1,0 +1,15 @@
+# SO / editor
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+
+# Backups locais
+*.bak
+*.bak[0-9]
+
+# Notas de planejamento (vivem em Agora Passei/contexto, fora do site publicado)
+/contexto/
+
+# Estado local do Supabase CLI (specifico da maquina, nao deve ser versionado)
+**/supabase/.temp/

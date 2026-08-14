@@ -2482,8 +2482,8 @@ const SUBJECT_COLORS = ['#f7a1a1','#a8d5a8','#a7d8f0','#f5b8d0','#e8dfa0','#9fb8
 function subjectColor(si){ return SUBJECT_COLORS[si % SUBJECT_COLORS.length]; }
 const STORE_KEY = CURRICULO.storeKey;
 const STORE_KEY_LEGACY = CURRICULO.storeKeyLegacy || null;
-// Migração de nome: quem já tinha progresso salvo sob a chave antiga (do
-// tempo em que o app se chamava "Estudos PETROBRAS") tem esses dados
+// Migração de nome: quem já tinha progresso salvo sob a chave antiga (de uma
+// versão anterior do app, antes de se chamar Estudo Certo) tem esses dados
 // copiados automaticamente pra chave nova, uma única vez, sem perder nada.
 (function migrateStoreKey(){
   try{

@@ -1,0 +1,9 @@
+# Normaliza fim de linha para LF no repositório, independente do sistema
+# operacional/editor usado para editar. Evita diffs "fantasma" de arquivo
+# inteiro quando alguém edita no Windows com CRLF.
+* text=auto eol=lf
+
+# Binários — nunca tentar normalizar fim de linha
+*.png binary
+*.jpg binary
+*.jpeg binary
