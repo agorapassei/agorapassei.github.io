@@ -4788,6 +4788,30 @@ function computeMastery(){
   });
   return { seen, dominated, pct: seen? Math.round(dominated/seen*100) : null };
 }
+// "Domínio do edital" (placar principal do Painel, ver renderHibrido) - ago/2026.
+// computeMastery() acima mede taxa de ACERTO entre as questões já tentadas (dominadas/tentadas)
+// - útil, mas não é "quanto do edital eu já domino": com 1 questão tentada e acertada, dava
+// 100%, ignorando as milhares de questões nunca tentadas e toda a teoria não lida (bug
+// reportado pelo Bruno). Domínio do edital agora é a média entre duas COBERTURAS, sempre
+// sobre o total do edital (matérias ativas), não sobre o que já foi tentado:
+//   cobertura de teoria   = páginas de teoria lidas / total de páginas de teoria
+//   cobertura de questões = questões dominadas (acertadas) / total de questões no banco
+// Média simples 50/50 - decisão de produto do Bruno (ler metade da teoria + dominar metade
+// das questões = 50%). Sobe bem mais devagar que a métrica antiga, o que é o objetivo.
+function computeDominioEdital(){
+  const totalTeoria = totalTheoryAll();
+  const coberturaTeoria = totalTeoria>0 ? (pagesReadAll()/totalTeoria) : 0;
+  const totalQ = totalQuestoesAll();
+  const m = computeMastery();
+  const coberturaQuestoes = totalQ>0 ? (m.dominated/totalQ) : 0;
+  const pct = Math.round(((coberturaTeoria+coberturaQuestoes)/2)*100);
+  return {
+    pct,
+    coberturaTeoriaPct: Math.round(coberturaTeoria*100),
+    coberturaQuestoesPct: Math.round(coberturaQuestoes*100),
+    mastery: m,
+  };
+}
 // Total de questoes cadastradas no banco, somando so as materias ativas no ciclo — usado pela
 // calculadora de "meta por data alvo" (aba Metas) pra saber quantas questoes ainda faltam.
 function totalQuestoesAll(){
@@ -5522,36 +5546,41 @@ function ciclosPendentesHtml(){
 function renderHibrido(){
   const box = document.getElementById('dashHibrido');
   if(!box) return;
-  const m = computeMastery();
+  const d = computeDominioEdital();
+  const m = d.mastery;
   const ft = computeFirstTryRate();
   const banco = totalQuestoesAll();
   const pend = m.seen - m.dominated;
   const vencidos = revisoesVencidasCount();
+  const semNada = pagesReadAll()===0 && m.seen===0;
 
   /* Rótulos explícitos: o bloco antigo dizia só "3 pendentes · 4.228 no banco · 1ª
      tentativa 0%" — três números sem unidade nem explicação do que cada um mede.
-     Nenhuma métrica nova aqui, só nomear o que já existia (ver computeMastery,
-     totalQuestoesAll, computeFirstTryRate, logo acima). */
-  const apoio = m.pct==null
+     Ago/2026: "taxa de acerto" (m.pct, dominadas/tentadas) virou uma das linhas de apoio
+     em vez do placar principal - ver computeDominioEdital() acima pro motivo (com 1
+     questão tentada e acertada, dominadas/tentadas dava 100%, que não é "domínio do
+     edital" nenhum). */
+  const apoio = semNada
     ? 'Nenhuma questão respondida ainda.'
     : `<b>${pend}</b> questão${pend===1?'':'ões'} pendente${pend===1?'':'s'} de domínio (já tentada${pend===1?'':'s'}, ainda não dominada${pend===1?'':'s'}) · <b>${banco.toLocaleString('pt-BR')}</b> questões no banco (matérias ativas)`
+      + (m.pct!=null ? ` · <b>${m.pct}%</b> de acerto entre as tentadas` : '')
       + (ft.pct!=null ? ` · <b>${ft.pct}%</b> de acerto na 1ª tentativa` : '');
 
   /* Sem dado, o placar NAO desenha o numero gigante nem a regua: um travessao a
      3,25rem lia como uma barra branca solta, e regua vazia e ruido. O bloco vira
      uma linha discreta - dado ausente e informacao, nao um buraco a preencher. */
-  box.innerHTML = (m.pct==null ? `
+  box.innerHTML = (semNada ? `
     <div class="hib-placar vazio">
       <span class="hib-rot">Domínio do edital</span>
-      <span class="hib-apoio">ainda sem questão respondida — a taxa aparece na primeira rodada</span>
+      <span class="hib-apoio">ainda sem teoria lida nem questão respondida — a taxa aparece na primeira rodada</span>
     </div>` : `
     <div class="hib-placar">
       <div class="hib-titulo">
         <span class="hib-rot">Domínio do edital</span>
-        <span class="hib-valor">${m.pct}%</span>
+        <span class="hib-valor">${d.pct}%</span>
       </div>
-      <div class="hib-valor-legenda">% de questões dominadas, entre as ${m.seen.toLocaleString('pt-BR')} que você já tentou responder</div>
-      ${reguaDominioHtml(m.pct)}
+      <div class="hib-valor-legenda">média entre ${d.coberturaTeoriaPct}% da teoria lida e ${d.coberturaQuestoesPct}% das questões do banco dominadas</div>
+      ${reguaDominioHtml(d.pct)}
       <div class="hib-apoio">${apoio}</div>
     </div>`) + `
     <div class="hib-grupo">hoje${vencidos?' · '+vencidos+(vencidos>1?' vencidos':' vencido'):''}</div>
