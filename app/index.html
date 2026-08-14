@@ -2353,15 +2353,6 @@
           <button class="btn danger sm" id="btnSyncDisconnect" style="display:none;"><svg class=ic-svg aria-hidden=true><use href=#ic-logout></use></svg> Sair</button>
         </div>
       </div>
-      <div class="card" style="box-shadow:none; border:none; padding:0; margin-top:18px;">
-        <h2>Questões reportadas</h2>
-        <div class="settings-sub" id="reportesCount">Nenhuma questão reportada.</div>
-        <div class="settings-sub" style="margin-top:2px;">Encontrou uma questão com gabarito errado, enunciado cortado ou imagem faltando? Use o botão <svg class=ic-svg aria-hidden=true><use href=#ic-alert></use></svg> dentro do quiz. Elas se acumulam aqui e são sincronizadas junto com o seu progresso.</div>
-        <div id="reportesList"></div>
-        <div class="data-btns" style="margin-top:10px;">
-          <button class="btn ghost sm" id="btnExportReportes"><svg class=ic-svg aria-hidden=true><use href=#ic-export></use></svg> Exportar lista (.json)</button>
-        </div>
-      </div>
       <div class="card" style="box-shadow:none; border:none; padding:0; margin-top:18px; display:none;" id="updateCard">
         <h2>Atualizações</h2>
         <div class="settings-sub" id="updateStatus">—</div>
@@ -3769,6 +3760,7 @@ function moveCicloSubject(si, dir){
   const tmp = c.ordem[idx];
   c.ordem[idx] = c.ordem[swapIdx];
   c.ordem[swapIdx] = tmp;
+  c.ordemManual = true; // a partir do primeiro reordenar manual, para de recalcular por tempo faltando
   save();
 }
 // Chamada sempre que uma sessao de estudo eh registrada (cronometro ou manual). Fecha o
@@ -3958,10 +3950,10 @@ const MANUAL_CATALOG = [
   { titulo:'Revisão', texto:'Agenda de revisão espaçada: depois de estudar a teoria de uma aula e fazer os exercícios dela (em até 48h), o app agenda 3 revisões espaçadas (padrão 7 → 15 → 30 dias, editável por matéria). O calendário mostra o que está atrasado, hoje e programado; "Escolher o que revisar" deixa rever qualquer aula já concluída fora do cronograma, inclusive filtrando pelas que você marcou como difíceis.' },
   { titulo:'Provas', texto:'Cadernos oficiais de concursos anteriores (CESGRANRIO), com gabarito oficial. Faça a prova inteira cronometrada como simulado, ou pratique só as questões de uma matéria específica dentro daquele caderno.' },
   { titulo:'Metas', texto:'Defina quantas páginas de teoria estudar por dia e acompanhe sua sequência de dias seguidos (streak). Também dá pra definir uma data alvo pra terminar toda a teoria restante — o app calcula o ritmo necessário em páginas/dia e questões/dia pra chegar lá no prazo, comparando com seu ritmo atual.' },
-  { titulo:'Ajustes', texto:'Tema claro/escuro, cor de destaque, tamanho da interface (Pequeno/Médio/Grande), tempos de Pomodoro, favoritos, esta central de Ajuda, backup/restauração e zerar progresso, status do arquivo local, sincronização entre aparelhos (login/conta), instalação do app neste dispositivo, questões reportadas com erro e verificação de atualizações.' },
+  { titulo:'Ajustes', texto:'Tema claro/escuro, cor de destaque, tempos de Pomodoro, esta central de Ajuda, backup/restauração e zerar progresso, status do arquivo local, sincronização entre aparelhos (login/conta), instalação do app neste dispositivo e verificação de atualizações. Favoritos mora na aba Questões.' },
   { titulo:'Sincronizar entre aparelhos', texto:'Crie uma conta (ou entre com uma existente) pra guardar seu progresso na nuvem e acessar de qualquer aparelho — sem isso, o progresso fica salvo só neste navegador/dispositivo. "Sincronizar agora" força uma atualização manual; "Sair" desconecta a conta deste aparelho sem apagar o que já foi sincronizado.' },
-  { titulo:'Favoritos', texto:'Marque qualquer questão com a estrela durante o quiz pra guardá-la numa lista pessoal de revisão — diferente de Refazer, aqui você escolhe manualmente o que quer rever, mesmo o que já acertou. Refaça a lista inteira a qualquer momento em Ajustes → Favoritos.' },
-  { titulo:'Reportar questão com erro', texto:'Encontrou gabarito errado, enunciado cortado ou imagem faltando numa questão? Toque no ícone de alerta dentro do quiz pra reportar. As questões reportadas se acumulam em Ajustes → Questões reportadas e são sincronizadas junto com seu progresso, pra revisão posterior.' },
+  { titulo:'Favoritos', texto:'Marque qualquer questão com a estrela durante o quiz pra guardá-la numa lista pessoal de revisão — diferente de Refazer, aqui você escolhe manualmente o que quer rever, mesmo o que já acertou. Refaça a lista inteira a qualquer momento em Questões → Favoritos.' },
+  { titulo:'Reportar questão com erro', texto:'Encontrou gabarito errado, enunciado cortado ou imagem faltando numa questão? Toque no ícone de alerta dentro do quiz pra reportar. As questões reportadas ficam guardadas e são sincronizadas junto com seu progresso - uma checagem automática diária analisa cada uma comparando com a apostila original e prepara a correção.' },
   { titulo:'Instalar o app', texto:'Em Ajustes → Instalar app, dá pra instalar o Estudo Certo neste dispositivo como um aplicativo de verdade — abre em tela cheia, sem a barra de endereço do navegador, e ganha um ícone próprio na tela inicial ou no menu de apps. O botão só aparece quando o navegador considera o app pronto pra instalação.' },
 ];
 /* ===================== TOOLTIP (ⓘ) ===================== */
@@ -4062,7 +4054,7 @@ function renderFavoritosCard(){
   const favStatus = document.getElementById('favoritosStatus');
   if(favStatus){
     const n = favoriteCount();
-    favStatus.textContent = n>0
+    favStatus.innerHTML = n>0
       ? `${n} questão${n===1?'':'ões'} favoritada${n===1?'':'s'}.`
       : 'Toque na <svg class=ic-svg aria-hidden=true><use href=#ic-star></use></svg> durante uma questão pra favoritá-la e revisar depois, independente de ter acertado ou errado.';
   }
@@ -4671,14 +4663,23 @@ function migrateDashboardWidgets(dash){
   });
   return dash;
 }
+// Disposição padrão do Painel pra quem nunca personalizou (conta nova, ou depois de
+// "Zerar progresso") - configurada por Bruno em ago/2026 pra bater com o que ele monta
+// manualmente toda vez em "Personalizar". Mudar a ordem aqui muda o painel de quem ainda
+// não mexeu em nada; quem já personalizou não é afetado (o "if(!state.dashboard)" só roda
+// uma vez, na primeira vez que o painel existe).
 function ensureDashboard(){
   if(!state.dashboard){
     state.dashboard = { widgets: [
-      { id: uid(), metricId:'taxa_dominio', modo:null, scope:null, visivel:true, ordem:1 },
-      { id: uid(), metricId:'tempo_total', modo:'consolidado', periodo:'total', scope:null, visivel:true, ordem:2 },
-      { id: uid(), metricId:'distribuicao_tempo', modo:null, scope:null, visivel:true, ordem:3 },
-      { id: uid(), metricId:'consistencia', modo:null, scope:null, visivel:true, ordem:4 },
-      { id: uid(), metricId:'tempo_restante', modo:'consolidado', scope:null, visivel:true, ordem:5 },
+      { id: uid(), metricId:'tempo_restante', modo:'teoria', periodo:null, scope:null, visivel:true, ordem:1, tamanho:'cheio' },
+      { id: uid(), metricId:'taxa_dominio', modo:null, scope:null, visivel:true, ordem:2 },
+      { id: uid(), metricId:'tempo_total', modo:'consolidado', periodo:'total', scope:null, visivel:true, ordem:3 },
+      { id: uid(), metricId:'tempo_restante', modo:'consolidado', scope:null, visivel:true, ordem:4 },
+      { id: uid(), metricId:'consistencia', modo:null, scope:null, visivel:true, ordem:5 },
+      { id: uid(), metricId:'distribuicao_tempo', modo:null, scope:null, visivel:true, ordem:6 },
+      { id: uid(), metricId:'paginas_lidas', modo:null, periodo:null, scope:null, visivel:true, ordem:7, tamanho:'metade' },
+      { id: uid(), metricId:'questoes_feitas', modo:null, periodo:null, scope:null, visivel:true, ordem:8, tamanho:'metade' },
+      { id: uid(), metricId:'progresso_materias', modo:null, periodo:null, scope:null, visivel:true, ordem:9, tamanho:'metade' },
     ]};
     save();
   } else {
@@ -7812,7 +7813,7 @@ function renderQuizQuestion(){
     html += `<div class="quiz-origin"><svg class=ic-svg aria-hidden=true><use href=#ic-book></use></svg> ${escapeHtml(origemLbl)}</div>`;
   }
   if(questaoReportada(q.id)){
-    html += `<div class="quiz-reportada"><svg class=ic-svg aria-hidden=true><use href=#ic-alert></use></svg> Você reportou um erro nesta questão. Ela está na lista de correção, em Configurações → Questões reportadas.</div>`;
+    html += `<div class="quiz-reportada"><svg class=ic-svg aria-hidden=true><use href=#ic-alert></use></svg> Você reportou um erro nesta questão. Ela está na fila de correção automática.</div>`;
   }
   /* Questões cujas ALTERNATIVAS eram imagens (ex: "assinale o gráfico de dispersão"):
      na extração da apostila as imagens não vieram e as opções ficaram em branco ou
@@ -8226,6 +8227,7 @@ function renderTempo(){
   document.getElementById('tempoResumoRow').innerHTML = `
     <div class="stat-box"><b>${fmtDuracao(tempoTotalTeoria())}</b><span>Teoria ${tipIcon('tempo_total')}</span></div>
     <div class="stat-box"><b>${fmtDuracao(tempoTotalQuestoes())}</b><span>Questões ${tipIcon('tempo_total')}</span></div>
+    <div class="stat-box"><b>${fmtDuracao(tempoTotalSimulados())}</b><span>Simulados ${tipIcon('tempo_total')}</span></div>
     <div class="stat-box"><b>${fmtDuracao(tempoTotalGeral())}</b><span>Total ${tipIcon('tempo_total')}</span></div>
   `;
 
@@ -8344,7 +8346,12 @@ function renderCicloSequencia(){
   const wrap = document.getElementById('cicloSequencia');
   if(!c || !wrap) return;
   const mostrarFinalizados = document.getElementById('cicloMostrarFinalizados').checked;
-  const ordem = c.ordem.filter(si=> isSubjectActive(si) && (mostrarFinalizados || cicloPct(si)<100));
+  // Por padrão (antes de qualquer reordenação manual com as setas), a sequência mostra
+  // sempre a matéria com mais tempo faltando primeiro - não a ordem alfabética/de cadastro
+  // guardada em c.ordem. Assim que o usuário reordena manualmente uma vez, respeita a
+  // ordem escolhida por ele dali em diante (c.ordemManual).
+  const base = c.ordemManual ? c.ordem.slice() : c.ordem.slice().sort((a,b)=> (cicloMetaSegundos(b)-cicloEstudadoSegundos(b)) - (cicloMetaSegundos(a)-cicloEstudadoSegundos(a)));
+  const ordem = base.filter(si=> isSubjectActive(si) && (mostrarFinalizados || cicloPct(si)<100));
   if(ordem.length===0){
     wrap.innerHTML = `<div class="empty">Todas as matérias já bateram a meta deste ciclo (ative "Mostrar finalizados" para ver todas mesmo assim)</div>`;
     return;
@@ -8563,7 +8570,7 @@ function renderPlanejamento(){
         <span class="swatch"></span>
         <svg class=ic-svg aria-hidden=true><use href=#ic-play></use></svg>
         <span class="nm">${SUBJECTS[si].name}${idx===0?' <b style="color:var(--mat-cor)">· mais atrasada</b>':''}<small>Aula ${SUBJECTS[si].aulas[ai]}</small></span>
-        <span class="def">falta ${fmtDuracao(deficit)}</span>
+        <span class="def">faltam ${fmtDuracao(deficit)}</span>
       </button>`;
     }).join('');
     puxarLista.querySelectorAll('.ciclo-puxar-row').forEach(btn=>{
@@ -8698,7 +8705,12 @@ function renderAll(skipMaterias){
   updateRevisaoBadge();
   wireTooltips();
 }
-document.getElementById('btnExportReportes').addEventListener('click', exportarReportes);
+// Card "Questões reportadas" foi removido da interface (Bruno prefere não ver essa lista
+// na tela - a automação diária já cuida de analisar os reportes direto no repositório).
+// O botão não existe mais, mas exportarReportes() continua disponível caso precise ser
+// chamado manualmente (ex: console) - por isso o guard em vez de remover a função.
+const btnExportReportesEl = document.getElementById('btnExportReportes');
+if(btnExportReportesEl) btnExportReportesEl.addEventListener('click', exportarReportes);
 document.getElementById('prvVoltar').addEventListener('click', ()=>{ provaAberta = null; renderProvas(); window.scrollTo(0,0); });
 
 /* Caderno de prova: navegacao de pagina, zoom e atalhos de teclado.
