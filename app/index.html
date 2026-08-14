@@ -1010,7 +1010,14 @@
      o botao desaparecia — sobrava so o badge vermelho flutuando. Agora sao TINTA.
      Sem fundo e sem canto de 12px: o menu e um glifo impresso, nao um chip. */
   .hamburger{
-    position:absolute; top:calc(env(safe-area-inset-top,0px) + 14px); left:16px; z-index:2;
+    /* Centralizado na ALTURA TOTAL do cabecalho (top:50% + translateY), nao fixo a
+       14px do topo: o cabecalho cresce (titulo + nome da aba + resumo + 3 stats),
+       entao um "top" fixo deixava os 3 tracos hoje mais pertos do topo do que do
+       centro do bloco de texto - assimetria vertical. header.app e' o ancestral
+       posicionado (sticky conta como positioning context), entao 50% aqui e' 50%
+       da altura real do cabecalho, safe-area incluida (ja faz parte do padding-top
+       dele). */
+    position:absolute; top:50%; transform:translateY(-50%); left:16px; z-index:2;
     width:34px; height:34px; border-radius:var(--radius-sm); border:none; cursor:pointer;
     background:transparent; display:flex; flex-direction:column;
     align-items:center; justify-content:center; gap:4px; padding:0;
