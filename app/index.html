@@ -1704,13 +1704,6 @@
   /* ===================== CONFIGURAÇÕES (tema, paleta, dados) =====================
      O botao que abre essa tela agora mora na barra inferior (depois de "Metas"),
      nao mais flutuando por cima do cabecalho. */
-  /* Tamanho da interface: usa a propriedade CSS "zoom" (não font-size) porque o app é
-     majoritariamente dimensionado em px, não em rem - reescalar só o font-size do <html>
-     não mudaria quase nada visualmente. "zoom" reescala o layout inteiro pixel a pixel,
-     replicando o mesmo efeito do zoom nativo do navegador (Ctrl +/-), só que persistido
-     nas configurações do app em vez de depender do zoom do navegador do usuário. */
-  html.size-medium{ zoom:1.15; }
-  html.size-large{ zoom:1.3; }
   .settings-menu-row{
     display:flex; align-items:center; justify-content:space-between; width:100%;
     padding:14px 16px; border-radius:14px; border:1.5px solid var(--border); background:var(--bg);
@@ -1888,6 +1881,11 @@
       <div class="data-btns">
         <button class="btn block" id="btnQuestoesTodas">▶ Responder todas as questões</button>
       </div>
+    </div>
+    <div class="card" id="favoritosCard">
+      <h2>Favoritos <span id="tipFavoritos"></span></h2>
+      <div class="settings-sub" id="favoritosStatus">Toque na <svg class=ic-svg aria-hidden=true><use href=#ic-star></use></svg> durante uma questão pra favoritá-la e revisar depois, independente de ter acertado ou errado.</div>
+      <button class="btn ghost sm" id="btnRefazerFavoritas"><svg class=ic-svg aria-hidden=true><use href=#ic-star-fill></use></svg> Refazer favoritas</button>
     </div>
     <div class="card">
       <div class="prv-filtros" id="questoesModoFiltro"></div>
@@ -2078,11 +2076,11 @@
 
     <div id="cicloMain" style="display:none;">
       <div id="cicloAvisoAjuste"></div>
-      <div class="card ciclo-puxar">
-        <h2>Puxar sessão agora</h2>
+      <details class="card ciclo-puxar recolhivel">
+        <summary><h2>Puxar sessão agora</h2><span class="marcador" aria-hidden="true"></span></summary>
         <div class="ciclo-puxar-sub" id="cicloPuxarSub"></div>
         <div id="cicloPuxarLista"></div>
-      </div>
+      </details>
       <div class="ciclo-actions">
         <button class="btn ghost sm" id="btnCicloRecomecar"><svg class=ic-svg aria-hidden=true><use href=#ic-restart></use></svg> Recomeçar</button>
         <button class="btn ghost sm" id="btnCicloReplanejar"><svg class=ic-svg aria-hidden=true><use href=#ic-pencil></use></svg> Replanejar</button>
@@ -2294,12 +2292,6 @@
           <div class="theme-opt" id="themeOptLight" data-theme-val="light"><span class="ic"><svg class=ic-svg aria-hidden=true><use href=#ic-sun></use></svg></span>Claro</div>
           <div class="theme-opt" id="themeOptDark" data-theme-val="dark"><span class="ic"><svg class=ic-svg aria-hidden=true><use href=#ic-moon></use></svg></span>Escuro</div>
         </div>
-        <div class="settings-sub" style="margin-bottom:8px;">Tamanho da interface</div>
-        <div class="theme-toggle" id="sizeToggle">
-          <div class="theme-opt" data-size-val="pequeno">Pequeno</div>
-          <div class="theme-opt" data-size-val="medio">Médio</div>
-          <div class="theme-opt" data-size-val="grande">Grande</div>
-        </div>
         <div class="settings-sub" style="margin-bottom:8px;">Cor de destaque</div>
         <div class="accent-row" id="accentRow"></div>
         <button class="btn ghost sm" id="btnReabrirOnboarding" style="margin-top:16px;"><svg class=ic-svg aria-hidden=true><use href=#ic-restart></use></svg> Refazer assistente de configuração inicial</button>
@@ -2316,11 +2308,6 @@
         <h2>Instalar app</h2>
         <div class="settings-sub" style="margin-top:0;">Instala o Estudo Certo neste dispositivo, como um app — abre em tela cheia, sem a barra do navegador.</div>
         <button class="btn ghost sm" id="btnInstallApp"><svg class=ic-svg aria-hidden=true><use href=#ic-download></use></svg> Instalar</button>
-      </div>
-      <div class="card" style="box-shadow:none; border:none; padding:0; margin-bottom:18px;" id="favoritosCard">
-        <h2>Favoritos <span id="tipFavoritos"></span></h2>
-        <div class="settings-sub" id="favoritosStatus">Toque na <svg class=ic-svg aria-hidden=true><use href=#ic-star></use></svg> durante uma questão pra favoritá-la e revisar depois, independente de ter acertado ou errado.</div>
-        <button class="btn ghost sm" id="btnRefazerFavoritas"><svg class=ic-svg aria-hidden=true><use href=#ic-star-fill></use></svg> Refazer favoritas</button>
       </div>
       <div class="card" style="box-shadow:none; border:none; padding:0; margin-bottom:18px;" id="helpMenuCard">
         <button class="settings-menu-row" id="btnOpenHelp">
@@ -2582,7 +2569,7 @@ async function abrirApostilaWeb(si, ai){
 function defaultState(){
   return { aulas:{}, dailyGoal:15, activity:{}, questions:{}, pageActivity:{}, subjectStages:{},
     sessions:[], activeSession:null, subjectWeights:{}, dashboard:null, ciclo:null,
-    settings:{ theme:'dark', accent:'apostila', size:'pequeno', pomodoro:{ focusMin:30, breakMin:10 } }, metaDataAlvo:null, answerLog:[], historicoCiclos:[],
+    settings:{ theme:'dark', accent:'apostila', pomodoro:{ focusMin:30, breakMin:10 } }, metaDataAlvo:null, answerLog:[], historicoCiclos:[],
     favorites:{}, onboardingDone:false, onboarding:null,
     reportes:[], provas:{}, stagesExercMigrado:true };
 }
@@ -3332,6 +3319,29 @@ function tempoRestanteTotalQuestoes(){
 /* ===================== MÉTRICAS ANALÍTICAS ===================== */
 function tempoTotalMateria(si, sessions){ return tempoTotalTeoriaMateria(si,sessions)+tempoTotalQuestoesMateria(si,sessions); }
 function tempoTotalGeral(sessions){ return tempoTotalTeoria(sessions)+tempoTotalQuestoes(sessions)+tempoTotalRevisao(sessions); }
+// Tempo gasto em simulados (provas completas, ver seção PROVAS/SIMULADOS). Fica de fora
+// de tempoTotalGeral() de propósito - não é "Teoria" nem "Questões" do ciclo de estudos,
+// então não deve contar pro progresso da meta semanal nem ser deduzido dela. Mora só no
+// widget "Tempo total estudado" (modo "Simulados"), como uma categoria à parte. Como cada
+// tentativa de prova não se divide por matéria/apostila da mesma forma que uma sessão de
+// estudo normal, esse total é sempre global - não varia por nível/matéria selecionado no
+// widget, só pelo período.
+function tempoTotalSimulados(periodo){
+  const provas = provasState();
+  const today = todayStr();
+  let inicio = null;
+  if(periodo==='hoje') inicio = today;
+  else if(periodo==='semana') inicio = addDays(today, -6);
+  else if(periodo==='mes') inicio = addDays(today, -29);
+  let total = 0;
+  Object.keys(provas).forEach(id=>{
+    const res = provas[id];
+    if(!res || !res.segundos) return;
+    if(inicio && !(res.d>=inicio && res.d<=today)) return;
+    total += res.segundos;
+  });
+  return total;
+}
 function tempoTotalApostila(si,ai, sessions){ return tempoTotalTeoriaApostila(si,ai,sessions)+tempoTotalQuestoesApostila(si,ai,sessions); }
 // Filtra as sessoes por periodo: 'hoje' | 'semana' (ultimos 7 dias) | 'mes' (ultimos 30 dias) | 'total'.
 // Usado pelo seletor inline de periodo do widget "Tempo total" no Painel.
@@ -3851,11 +3861,11 @@ const METRICS_CATALOG = [
     tooltip:'Quantas aulas estão com revisão espaçada vencida — ou seja, atrasadas ou marcadas para hoje. Quando está zerado, o widget mostra a data da próxima revisão agendada. A fila completa, com calendário e agenda, fica na aba Revisão.' },
 
   { id:'tempo_total', categoria:'Tempo', titulo:'Tempo total estudado',
-    modos:[{id:'teoria',label:'Teoria'},{id:'questoes',label:'Questões'},{id:'consolidado',label:'Consolidado'}],
+    modos:[{id:'teoria',label:'Teoria'},{id:'questoes',label:'Questões'},{id:'consolidado',label:'Consolidado'},{id:'simulados',label:'Simulados'}],
     niveis:['global','materia','apostila','lista'],
     periodos:[{id:'hoje',label:'Hoje'},{id:'semana',label:'Semana'},{id:'mes',label:'Mês'},{id:'total',label:'Total'}],
     tamanho:'pequeno',
-    tooltip:'Soma do tempo líquido (sem contar pausas) que você já dedicou ao estudo. No próprio widget você escolhe o que medir — Teoria, Questões ou os dois juntos (Consolidado) —, a granularidade (Geral, Por matéria, Por apostila, ou Todas as matérias ao mesmo tempo numa lista) e o período: Hoje, Semana (últimos 7 dias), Mês (últimos 30 dias) ou Total (todo o histórico).' },
+    tooltip:'Soma do tempo líquido (sem contar pausas) que você já dedicou ao estudo. No próprio widget você escolhe o que medir — Teoria, Questões, os dois juntos (Consolidado) ou o tempo gasto em Simulados (provas completas, à parte — não entra no Consolidado nem no progresso do Ciclo) —, a granularidade e o período: Hoje, Semana (últimos 7 dias), Mês (últimos 30 dias) ou Total (todo o histórico).' },
   { id:'ritmo', categoria:'Tempo', titulo:'Ritmo',
     modos:[{id:'leitura',label:'Leitura'},{id:'resolucao',label:'Resolução'}],
     niveis:['global','materia','apostila'], tamanho:'pequeno',
@@ -4003,25 +4013,14 @@ const ACCENTS = [
   { id:'laranja', label:'Laranja', cor:'#d9720f' },
   { id:'vermelho', label:'Vermelho', cor:'#c23b3b' },
 ];
-const SIZES = ['pequeno','medio','grande'];
 function applyTheme(){
   const s = state.settings || { theme:'dark', accent:'apostila' };
   document.body.classList[s.theme==='dark' ? 'add' : 'remove']('theme-dark');
   ACCENTS.forEach(a=> document.body.classList.remove('accent-'+a.id));
   document.body.classList.add('accent-'+(s.accent || 'apostila'));
-  SIZES.forEach(sz=> document.documentElement.classList.remove('size-'+sz));
-  const size = s.size || 'pequeno';
-  if(size!=='pequeno') document.documentElement.classList.add('size-'+size);
 }
 function setTheme(theme){
   state.settings.theme = theme==='dark' ? 'dark' : 'light';
-  save();
-  applyTheme();
-  renderSettingsControls();
-}
-function setSize(size){
-  if(!SIZES.includes(size)) return;
-  state.settings.size = size;
   save();
   applyTheme();
   renderSettingsControls();
@@ -4039,13 +4038,6 @@ function renderSettingsControls(){
   const darkOpt = document.getElementById('themeOptDark');
   if(lightOpt) lightOpt.classList[s.theme!=='dark' ? 'add' : 'remove']('active');
   if(darkOpt) darkOpt.classList[s.theme==='dark' ? 'add' : 'remove']('active');
-  const sizeToggle = document.getElementById('sizeToggle');
-  if(sizeToggle){
-    const curSize = s.size || 'pequeno';
-    sizeToggle.querySelectorAll('.theme-opt').forEach(opt=>{
-      opt.classList[opt.dataset.sizeVal===curSize ? 'add' : 'remove']('active');
-    });
-  }
   const row = document.getElementById('accentRow');
   if(row){
     row.innerHTML = ACCENTS.map(a=>`<div class="accent-swatch${s.accent===a.id?' active':''}" data-accent-val="${a.id}" style="background:${a.cor};" title="${a.label}">${s.accent===a.id?'<svg class=ic-svg aria-hidden=true><use href=#ic-check></use></svg>':''}</div>`).join('');
@@ -4060,6 +4052,11 @@ function renderSettingsControls(){
     if(document.activeElement!==focusInput) focusInput.value = cfg.focusMin;
     if(document.activeElement!==breakInput) breakInput.value = cfg.breakMin;
   }
+  wireTooltips(document.getElementById('settingsOverlay'));
+}
+// Card "Favoritos" mora na aba Questões (não mais em Ajustes) - função própria porque
+// precisa ser chamada sempre que a aba Questões renderiza, não só quando Ajustes abre.
+function renderFavoritosCard(){
   const tipFav = document.getElementById('tipFavoritos');
   if(tipFav) tipFav.innerHTML = tipIcon('favoritos');
   const favStatus = document.getElementById('favoritosStatus');
@@ -4071,8 +4068,6 @@ function renderSettingsControls(){
   }
   const btnRefazerFav = document.getElementById('btnRefazerFavoritas');
   if(btnRefazerFav) btnRefazerFav.disabled = favoriteCount()===0;
-
-  wireTooltips(document.getElementById('settingsOverlay'));
 }
 // Conteúdo de Ajuda (tutoriais + manual) só é montado quando o usuário abre a
 // janela de Ajuda (botão "Ajuda" em Ajustes) - fica numa janela própria, separada
@@ -4095,9 +4090,6 @@ function renderHelpControls(){
 applyTheme();
 document.getElementById('themeOptLight').addEventListener('click', ()=> setTheme('light'));
 document.getElementById('themeOptDark').addEventListener('click', ()=> setTheme('dark'));
-document.querySelectorAll('#sizeToggle .theme-opt').forEach(opt=>{
-  opt.addEventListener('click', ()=> setSize(opt.dataset.sizeVal));
-});
 
 // Sessão padrão Pomodoro (foco/intervalo), persistida em state.settings.pomodoro —
 // mesma storeKey do currículo, não uma chave solta nova.
@@ -4254,10 +4246,6 @@ function onbBodyAparencia(){
     <div class="theme-opt ${s.theme!=='dark'?'active':''}" data-theme-val="light"><span class="ic"><svg class=ic-svg aria-hidden=true><use href=#ic-sun></use></svg></span>Claro</div>
     <div class="theme-opt ${s.theme==='dark'?'active':''}" data-theme-val="dark"><span class="ic"><svg class=ic-svg aria-hidden=true><use href=#ic-moon></use></svg></span>Escuro</div>
   </div>
-  <div class="settings-sub" style="margin:14px 0 8px;">Tamanho da interface</div>
-  <div class="theme-toggle" id="onbSizeToggle">
-    ${SIZES.map(sz=>`<div class="theme-opt ${(s.size||'pequeno')===sz?'active':''}" data-size-val="${sz}">${sz==='pequeno'?'Pequeno':sz==='medio'?'Médio':'Grande'}</div>`).join('')}
-  </div>
   <div class="settings-sub" style="margin:14px 0 8px;">Cor de destaque</div>
   <div class="accent-row" id="onbAccentRow">${accentRow}</div>`;
 }
@@ -4313,9 +4301,6 @@ function renderOnbStep(){
     document.querySelectorAll('#onbThemeToggle .theme-opt').forEach(opt=>{
       opt.addEventListener('click', ()=>{ setTheme(opt.dataset.themeVal); syncOnbAparenciaUi(); });
     });
-    document.querySelectorAll('#onbSizeToggle .theme-opt').forEach(opt=>{
-      opt.addEventListener('click', ()=>{ setSize(opt.dataset.sizeVal); syncOnbAparenciaUi(); });
-    });
     document.querySelectorAll('#onbAccentRow .accent-swatch').forEach(sw=>{
       sw.addEventListener('click', ()=>{ setAccent(sw.dataset.accentVal); syncOnbAparenciaUi(); });
     });
@@ -4343,9 +4328,6 @@ function syncOnbAparenciaUi(){
   document.getElementById('onbBody').innerHTML = onbBodyAparencia();
   document.querySelectorAll('#onbThemeToggle .theme-opt').forEach(opt=>{
     opt.addEventListener('click', ()=>{ setTheme(opt.dataset.themeVal); syncOnbAparenciaUi(); });
-  });
-  document.querySelectorAll('#onbSizeToggle .theme-opt').forEach(opt=>{
-    opt.addEventListener('click', ()=>{ setSize(opt.dataset.sizeVal); syncOnbAparenciaUi(); });
   });
   document.querySelectorAll('#onbAccentRow .accent-swatch').forEach(sw=>{
     sw.addEventListener('click', ()=>{ setAccent(sw.dataset.accentVal); syncOnbAparenciaUi(); });
@@ -4925,6 +4907,23 @@ function buildTempoListaHtml(rows, emptyMsg){
   return body + `<div class="time-list-row" style="border-top:1.5px solid var(--border); margin-top:4px; padding-top:10px; font-weight:800;"><div class="nm">Total (todas as matérias)</div><div class="val">${fmtDuracao(total)}</div></div>`;
 }
 function buildTempoTotalListaHtml(modo, periodo){
+  // Simulados não se divide por matéria como teoria/questões (uma prova mistura matérias
+  // num único tempo cronometrado) - a lista, nesse modo, é por prova em vez de por matéria.
+  if(modo==='simulados'){
+    const today = todayStr();
+    let inicio = null;
+    if(periodo==='hoje') inicio = today;
+    else if(periodo==='semana') inicio = addDays(today, -6);
+    else if(periodo==='mes') inicio = addDays(today, -29);
+    const provas = provasState();
+    const rows = Object.keys(provas).map(id=>{
+      const res = provas[id]; const p = provaPorId(id);
+      if(!res || !res.segundos) return null;
+      if(inicio && !(res.d>=inicio && res.d<=today)) return null;
+      return { name: (p? p.orgao+' '+p.ano+' — '+p.cargo : id), tempo: res.segundos };
+    }).filter(Boolean).sort((a,b)=>b.tempo-a.tempo);
+    return buildTempoListaHtml(rows, 'Nenhum simulado feito nesse período ainda.');
+  }
   const sessions = sessionsNoPeriodo(periodo);
   const rows = SUBJECTS.filter((s,si)=>isSubjectActive(si)).map((s)=>{
     const si = SUBJECTS.indexOf(s);
@@ -4987,12 +4986,17 @@ function computeWidgetValue(metricId, modo, nivel, scope, periodo){
       return { value: r!=null? fmtDuracao(r)+unidade : '–', sub: subLabelEscopo };
     }
     case 'tempo_total': {
+      const subComPeriodo = periodo && periodo!=='total' ? subLabelEscopo+' — '+periodoLabel(periodo) : subLabelEscopo;
+      // Simulados é sempre global (ver comentário em tempoTotalSimulados) - não varia por
+      // matéria/apostila selecionada no widget, só pelo período.
+      if(modo==='simulados'){
+        return { value: fmtDuracao(tempoTotalSimulados(periodo)), sub: (periodo && periodo!=='total' ? periodoLabel(periodo) : 'Total') };
+      }
       const sessions = sessionsNoPeriodo(periodo);
       let v;
       if(nivel==='apostila') v = modo==='teoria'? tempoTotalTeoriaApostila(si,ai,sessions) : modo==='questoes'? tempoTotalQuestoesApostila(si,ai,sessions) : tempoTotalApostila(si,ai,sessions);
       else if(nivel==='materia') v = tempoTotalMateriaPorModo(si, modo, sessions);
       else v = modo==='teoria'? tempoTotalTeoria(sessions) : modo==='questoes'? tempoTotalQuestoes(sessions) : tempoTotalGeral(sessions);
-      const subComPeriodo = periodo && periodo!=='total' ? subLabelEscopo+' — '+periodoLabel(periodo) : subLabelEscopo;
       return { value: fmtDuracao(v), sub: subComPeriodo };
     }
     case 'tempo_restante': {
@@ -5529,6 +5533,9 @@ function renderQuestoes(filterArg){
   const listaEl = document.getElementById('questoesLista');
   const filtrosEl = document.getElementById('questoesModoFiltro');
   if(!resumo || !listaEl || !filtrosEl) return;
+
+  renderFavoritosCard();
+  wireTooltips(document.getElementById('view-questoes'));
 
   const todas = allActiveQuestions();
   const st = statsForQuestions(todas);
@@ -6712,11 +6719,17 @@ document.getElementById('fileImport').addEventListener('change', (e)=>{
 });
 document.getElementById('btnReset').addEventListener('click', ()=>{
   // "Zerar progresso" é irreversível: apaga local e, se sincronizado, sobrescreve a nuvem
-  // poucos segundos depois (ver save()/syncSchedulePush()). Mesmo sendo um confirm() de
-  // clique único, o histórico automático no Supabase (progress_history) guarda uma cópia
-  // de antes de zerar, então não é uma perda definitiva mesmo que seja clicado sem querer.
+  // poucos segundos depois (ver save()/syncSchedulePush()). Um confirm() de um clique só é
+  // fácil demais de aceitar sem pensar - pedir pra digitar a palavra eleva o custo de um
+  // clique acidental sem impedir quem realmente quer zerar. (O histórico automático no
+  // Supabase - progress_history - também guarda uma cópia de antes de zerar.)
   const avisoNuvem = syncEnabled() ? ' Isso também vai apagar o que está sincronizado na nuvem.' : '';
-  if(!confirm('Isso vai apagar TODO o progresso salvo neste dispositivo, sem volta.'+avisoNuvem+' Continuar?')) return;
+  const digitado = prompt('Isso vai apagar TODO o progresso salvo neste dispositivo, sem volta.'+avisoNuvem+' Pra confirmar, digite APAGAR:');
+  if(digitado === null) return; // cancelou
+  if((digitado||'').trim().toUpperCase() !== 'APAGAR'){
+    toast('Não digitou "APAGAR" - nada foi apagado.');
+    return;
+  }
   state = defaultState();
   save();
   renderAll();
@@ -8128,7 +8141,7 @@ function renderTempoManualForm(){
   wrap.innerHTML = `
     <div class="form-row">
       <label>Matéria</label>
-      <select id="manualMateria">${SUBJECTS.map((s,si)=>`<option value="${si}">${s.name}</option>`).join('')}</select>
+      <select id="manualMateria">${SUBJECTS.map((s,si)=>({s,si})).filter(({si})=>isSubjectActive(si)).map(({s,si})=>`<option value="${si}">${s.name}</option>`).join('')}</select>
     </div>
     <div class="form-row">
       <label>Aula / apostila</label>
@@ -8550,7 +8563,7 @@ function renderPlanejamento(){
         <span class="swatch"></span>
         <svg class=ic-svg aria-hidden=true><use href=#ic-play></use></svg>
         <span class="nm">${SUBJECTS[si].name}${idx===0?' <b style="color:var(--mat-cor)">· mais atrasada</b>':''}<small>Aula ${SUBJECTS[si].aulas[ai]}</small></span>
-        <span class="def">${fmtDuracao(deficit)} atrás</span>
+        <span class="def">falta ${fmtDuracao(deficit)}</span>
       </button>`;
     }).join('');
     puxarLista.querySelectorAll('.ciclo-puxar-row').forEach(btn=>{
