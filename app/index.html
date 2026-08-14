@@ -4171,7 +4171,7 @@ function formatarIntervaloSemana(segundaStr){
 const NIVEL_LABELS = { global:'Geral', materia:'Por matéria', apostila:'Por apostila', lista:'Todas as matérias' };
 const METRICS_CATALOG = [
   { id:'taxa_dominio', categoria:'Questões', titulo:'Taxa de Domínio', niveis:['global','materia'], tamanho:'pequeno',
-    tooltip:'Percentual de questões que você já sabe resolver corretamente, considerando apenas a situação mais recente de cada uma. Assim que você acerta uma questão pela primeira vez, ela passa a contar como "dominada" e não volta a pesar contra você, mesmo que tenha errado antes. Por isso essa métrica só sobe (ou fica igual) com o tempo — é a forma mais confiável de acompanhar sua evolução real. Use o seletor "Geral / Por matéria" no próprio widget para alternar a visão.' },
+    tooltip:'Percentual do total de questões cadastradas no banco (não só as que você já tentou) que você já sabe resolver corretamente, considerando a situação mais recente de cada uma. Assim que você acerta uma questão pela primeira vez, ela passa a contar como "dominada" e não volta a pesar contra você, mesmo que tenha errado antes — por isso essa métrica só sobe (ou fica igual) com o tempo. Questões que você ainda nem tentou contam contra o percentual, do mesmo jeito que as que você errou — assim o número reflete quanto da matéria você realmente já domina, não só seu desempenho nas questões que escolheu tentar. Use o seletor "Geral / Por matéria" no próprio widget para alternar a visão.' },
   { id:'taxa_primeira_tentativa', categoria:'Questões', titulo:'Taxa na 1ª Tentativa', niveis:['global'], tamanho:'pequeno',
     tooltip:'Percentual de questões que você acertou já na primeira vez que resolveu, sem contar as revisões. Mostra o quanto você está absorvendo bem o conteúdo novo, sem o efeito de "decorar a resposta" por repetir a mesma questão várias vezes.' },
   { id:'taxa_geral_tentativa', categoria:'Questões', titulo:'Taxa geral por tentativa', niveis:['global'], tamanho:'pequeno',
@@ -4833,7 +4833,12 @@ function subjectAccuracy(si){
    Baseada em questões DISTINTAS, nao em tentativas:
    - "dominada": última tentativa correta foi obtida alguma vez (fica dominada para sempre)
    - "pendente": já tentada, mas nunca acertada (ou ainda nao dominada)
-   Taxa de Domínio = dominadas / (dominadas+pendentes) — é monotônica (só sobe). */
+   computeMastery().pct = dominadas / tentadas (SÓ entre as questões já tentadas) — é
+   monotônica (só sobe), e ainda é usada internamente (snapshot do Ciclo, cálculo de questões
+   restantes na aba Metas). NÃO é o que o widget "Taxa de Domínio" do Painel mostra desde
+   ago/2026 — esse usa dominadas / TOTAL DO BANCO (ver computeWidgetValue, case 'taxa_dominio',
+   e totalQuestoesForSubject/totalQuestoesAll), pro mesmo motivo do computeDominioEdital()
+   logo abaixo: dominadas/tentadas dá 100% com poucas questões tentadas, o que engana. */
 function computeMastery(){
   let seen=0, dominated=0;
   const qsi = qidSubjectMap();
@@ -4877,6 +4882,13 @@ function totalQuestoesAll(){
     s.aulas.forEach((a,ai)=>{ total+=bankFor(si,ai).length; });
   });
   return total;
+}
+// Total de questoes cadastradas no banco para UMA materia (todas as aulas dela), independente
+// de quantas ja foram tentadas — usado pelo widget "Taxa de Domínio" (ago/2026, bug reportado
+// pelo Bruno: com poucas questoes tentadas e todas certas, dominadas/tentadas dava 100%, o que
+// nao significa "domino a materia". Mesma logica ja usada em computeDominioEdital().
+function totalQuestoesForSubject(si){
+  return SUBJECTS[si].aulas.reduce((sum,a,ai)=> sum + bankFor(si,ai).length, 0);
 }
 function subjectMastery(si){
   let seen=0, dominated=0;
@@ -5338,8 +5350,13 @@ function computeWidgetValue(metricId, modo, nivel, scope, periodo){
     : nivel==='materia' ? SUBJECTS[si].name : 'todas as matérias';
   switch(metricId){
     case 'taxa_dominio': {
+      // ago/2026: percentual e sub-legenda passaram a ser contra o TOTAL de questoes do banco
+      // (nao so as ja tentadas) — bug reportado pelo Bruno: com 1 questao tentada e acertada,
+      // dominadas/tentadas dava 100%, escondendo as milhares de questoes nunca tentadas.
       const m = nivel==='materia'? subjectMastery(si) : computeMastery();
-      return { value: m.pct==null?'–':m.pct+'%', sub: `${m.dominated}/${m.seen} dominadas — ${subLabelEscopo}` };
+      const total = nivel==='materia'? totalQuestoesForSubject(si) : totalQuestoesAll();
+      const pct = total? Math.round(m.dominated/total*100) : null;
+      return { value: pct==null?'–':pct+'%', sub: `${m.dominated}/${total} questões do banco dominadas — ${subLabelEscopo}` };
     }
     case 'taxa_primeira_tentativa': {
       const m = computeFirstTryRate();
