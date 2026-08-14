@@ -2064,7 +2064,7 @@
           Defina quantas horas por semana pretende estudar. O app sugere automaticamente um peso para cada matéria (com base no que falta ler) e distribui essas horas proporcionalmente, montando uma sequência — um ciclo que se repete conforme você estuda. Depois de criar, você pode ajustar os pesos e escolher quais matérias entram no ciclo em "Replanejar".
         </div>
         <div class="form-row">
-          <label>Horas de estudo por semana</label>
+          <label>Tempo estimado do ciclo semanal (horas)</label>
           <input type="number" id="cicloSetupHoras" min="1" max="100" value="20">
         </div>
         <button class="btn block" id="btnCriarCiclo">Criar ciclo de estudos</button>
@@ -3641,9 +3641,16 @@ function cicloPct(si){
 function cicloEstudadoTotalSegundos(){
   return SUBJECTS.reduce((sum,s,si)=> sum+cicloEstudadoSegundos(si), 0);
 }
+// Tempo REAL do ciclo, não a estimativa digitada em "Tempo estimado do ciclo semanal".
+// Cada matéria já arredonda sua meta pro incremento de 15min mais próximo, com piso de
+// 30min (arredondar15min, usada dentro de cicloMetaSegundos) - então a soma dessas metas
+// já arredondadas quase nunca bate exatamente com horasPorSemana*3600. É essa soma real
+// (não a estimativa bruta) que deve aparecer em qualquer lugar que mostra o "total do
+// ciclo" pro usuário (donut, barra de progresso) - ver renderPlanejamento().
 function cicloMetaTotalSegundos(){
   const c = ensureCicloDefaults();
-  return c ? (c.horasPorSemana||0)*3600 : 0;
+  if(!c) return 0;
+  return SUBJECTS.reduce((sum,s,si)=> sum+cicloMetaSegundos(si), 0);
 }
 /* ===================== HISTÓRICO DE CICLOS + AJUSTE POR DESVIO =====================
    Leva de melhorias da tela do Ciclo (ago/2026). Toda vez que um ciclo fecha — automaticamente
@@ -4435,7 +4442,7 @@ function onbBodyDisponibilidade(){
   return `<h2 style="margin:0 0 4px;">Quanto tempo você pretende dedicar aos estudos?</h2>
   <div class="settings-sub" style="margin-top:0;">Isso monta seu Ciclo de Estudos automaticamente. Dá pra ajustar os pesos por matéria depois, a qualquer momento, em Ciclo → Replanejar.</div>
   <div class="form-row" style="margin-top:16px;">
-    <label>Horas de estudo por semana</label>
+    <label>Tempo estimado do ciclo semanal (horas)</label>
     <input type="number" id="onbHoras" min="1" max="100" value="${onbAnswers.horas}">
   </div>
   <div class="settings-sub" style="margin:18px 0 8px;">Quais matérias entram no seu ciclo? Desmarque as que não vai estudar — elas somem das previsões de páginas e do restante do app, e dá pra trazer de volta depois em Ciclo → Replanejar.</div>
@@ -8801,7 +8808,7 @@ function openReplanCicloModal(){
   const overrideState = {};
   SUBJECTS.forEach((s,si)=>{ overrideState[si] = c.pesos[si]!=null; });
   const calC = ensureCalendarioDefaults();
-  let html = `<div class="form-row"><label>Horas de estudo por semana</label><input type="number" id="replanHoras" min="1" max="100" value="${c.horasPorSemana}"></div>`;
+  let html = `<div class="form-row"><label>Tempo estimado do ciclo semanal (horas)</label><input type="number" id="replanHoras" min="1" max="100" value="${c.horasPorSemana}"></div>`;
   html += `<div class="form-row"><label>Dias de estudo no Calendário ${tipIcon('calendario_semana')}</label></div>`;
   html += `<div class="cal-dias-cfg">` + DIAS_SEMANA.map(d=>`
     <div class="cal-dia-cfg-item">
