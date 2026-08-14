@@ -2007,6 +2007,16 @@
     </div>
   </section>
 
+  <!-- EDITAL -->
+  <section class="view" id="view-edital">
+    <div class="card" id="editalResumoCard">
+      <h2>Cobertura do edital</h2>
+      <div style="font-size:.85rem; color:var(--text-mut); margin-bottom:8px;" id="editalResumoTxt"></div>
+      <div class="bar"><i id="editalResumoBar" style="width:0%"></i></div>
+    </div>
+    <div id="editalList"></div>
+  </section>
+
   <!-- TEMPO -->
   <section class="view" id="view-tempo">
     <div class="card" id="tempoActiveCard" style="display:none;">
@@ -2249,6 +2259,7 @@
   <button data-view="revisao"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2.5 20.5 6 17 9.5"/><path d="M3.5 11V9a3.5 3.5 0 0 1 3.5-3.5h13.5"/><path d="M7 21.5 3.5 18 7 14.5"/><path d="M20.5 13v2a3.5 3.5 0 0 1-3.5 3.5H3.5"/></svg><i class="tab-badge" id="revisaoBadge" hidden></i></span>Revisão</button>
   <button data-view="provas"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.2h8.2l4.3 4.3v13.3H6.5z"/><path d="M14.4 3.4v4.3h4.3"/><path d="M9.4 12.4h6.2M9.4 15.7h6.2"/></svg></span>Provas</button>
   <button data-view="metas"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="4.6"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/></svg></span>Metas</button>
+  <button data-view="edital"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.2h11a1 1 0 0 1 1 1v16.4l-6.5-3.2-6.5 3.2V4.2a1 1 0 0 1 1-1z"/><path d="M9 8.2h6M9 11.6h6"/></svg></span>Edital</button>
   <button type="button" data-view="ajustes" id="btnSettingsTab"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 3.5v2.2M12 18.3v2.2M20.5 12h-2.2M5.7 12H3.5M17.7 6.3l-1.6 1.6M7.9 16.1l-1.6 1.6M17.7 17.7l-1.6-1.6M7.9 7.9 6.3 6.3"/></svg></span>Ajustes</button>
   </div>
 </nav>
@@ -2479,6 +2490,7 @@ function pagesInfo(si,ai){
   return row || {total:1, theory:1};
 }
 const APOSTILA_FILES = CURRICULO.apostilaFiles;
+const EDITAL_ITEMS = CURRICULO.editalItems || [];
 function apostilaHref(si,ai){
   // Copia de redesign: sem os PDFs, devolve null e o app mostra o estado proprio
   // de "apostila nao disponivel" em vez de um link que abre pagina de erro.
@@ -4685,6 +4697,7 @@ const VIEW_TITLES = {
   refazer:      { label:'Questões para refazer', desc:'Questões que você errou e ainda não dominou - vale a pena revisar.' },
   revisao:      { label:'Revisão espaçada', desc:'Aulas com revisão programada pra hoje, no intervalo certo pra fixar.' },
   metas:        { label:'Metas', desc:'Sua sequência de dias estudados e a meta diária de páginas.' },
+  edital:       { label:'Edital', desc:'Cada item do conteúdo programático e se já está coberto pelas aulas estudadas.' },
   ajustes:      { label:'Ajustes', desc:'Aparência, sessão de estudo, dados, sincronização e ajuda.' },
 };
 function updateHeaderForView(viewName){
@@ -7030,6 +7043,54 @@ document.getElementById('metaDataAlvo').addEventListener('change', ()=>{
   renderMetaDataAlvo();
 });
 
+/* ===================== EDITAL =====================
+   Cada item do conteúdo programático (CURRICULO.editalItems) fica "coberto" quando TODAS as
+   aulas correlacionadas a ele já estão com studied=true. Progresso do item = fração de aulas
+   estudadas / total de aulas do item (permite ver progresso parcial antes de completar). */
+function renderEdital(){
+  const wrap = document.getElementById('editalList');
+  if(!wrap) return;
+  wrap.innerHTML = '';
+  if(!EDITAL_ITEMS.length){
+    wrap.innerHTML = '<div class="card"><div class="empty">Nenhum item de edital configurado.</div></div>';
+    return;
+  }
+  let totalItens = 0, itensCobertos = 0;
+  const blocos = [];
+  const blocoIdx = {};
+  EDITAL_ITEMS.forEach(it=>{
+    if(!(it.bloco in blocoIdx)){ blocoIdx[it.bloco] = blocos.length; blocos.push({ nome:it.bloco, itens:[] }); }
+    blocos[blocoIdx[it.bloco]].itens.push(it);
+  });
+  blocos.forEach(bloco=>{
+    const card = document.createElement('div');
+    card.className = 'card';
+    let bodyHtml = `<h2>${escapeHtml(bloco.nome)}</h2>`;
+    bloco.itens.forEach(it=>{
+      totalItens++;
+      const estudadas = it.aulas.filter(([si,ai])=> getAula(si,ai).studied).length;
+      const total = it.aulas.length;
+      const coberto = total>0 && estudadas===total;
+      if(coberto) itensCobertos++;
+      const fracao = total>1 ? `<span style="color:var(--text-mut); font-size:.72rem;">(${estudadas}/${total} aulas)</span>` : '';
+      bodyHtml += `
+        <div class="aula-top" style="margin-bottom:10px;">
+          <div class="chk ${coberto?'on':''}">${coberto?'<svg class=ic-svg aria-hidden=true><use href=#ic-check></use></svg>':''}</div>
+          <div class="aula-txt">
+            <div class="nm">${escapeHtml(it.item)} ${fracao}</div>
+          </div>
+        </div>`;
+    });
+    card.innerHTML = bodyHtml;
+    wrap.appendChild(card);
+  });
+  const pct = totalItens>0 ? Math.round(itensCobertos/totalItens*100) : 0;
+  const resumoTxt = document.getElementById('editalResumoTxt');
+  const resumoBar = document.getElementById('editalResumoBar');
+  if(resumoTxt) resumoTxt.textContent = `${itensCobertos} de ${totalItens} itens do edital cobertos (${pct}%)`;
+  if(resumoBar) resumoBar.style.width = pct+'%';
+}
+
 /* Export / Import / Reset */
 document.getElementById('btnExport').addEventListener('click', ()=>{
   const blob = new Blob([JSON.stringify(state,null,2)], {type:'application/json'});
@@ -9078,6 +9139,7 @@ function renderAll(skipMaterias){
   renderRefazer();
   renderRevisao();
   renderMetas();
+  renderEdital();
   renderTempo();
   renderPlanejamento();
   renderReportes();
