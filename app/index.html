@@ -512,8 +512,19 @@
   .edital-status{font-size:.72rem; color:var(--text-mut); display:flex; align-items:center; gap:5px;}
   .edital-status b{color:var(--text); font-weight:700;}
   .edital-status .status-dot{margin-right:1px;}
-  .edital-bloco-hd{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:2px;}
+  /* Card de bloco do Edital é retrátil (clica no cabeçalho pra abrir/fechar) - com 84
+     itens espalhados por 16 blocos, todo mundo aberto de uma vez vira uma parede de
+     texto só de rolar. Fechado, sobra só o nome do bloco + X/Y itens cobertos, que já
+     serve pra uma conferência rápida sem precisar abrir todos. */
+  .edital-bloco-card{cursor:default;}
+  .edital-bloco-hd{display:flex; align-items:center; gap:10px; margin:-2px -2px 0; padding:2px; cursor:pointer; border-radius:8px;}
+  .edital-bloco-hd:hover{background:var(--bg);}
+  .edital-bloco-hd h2{flex:1;}
+  .edital-bloco-hd .chev{font-size:.75rem; color:var(--text-mut); transition:transform .2s; flex-shrink:0;}
+  .edital-bloco-card.open .edital-bloco-hd .chev{transform:rotate(90deg);}
   .edital-bloco-pct{font-size:.75rem; color:var(--text-mut); font-weight:700; flex-shrink:0;}
+  .edital-bloco-body{display:none;}
+  .edital-bloco-card.open .edital-bloco-body{display:block; margin-top:14px;}
 
   /* Status dot simples (bolinha), pra listas mais compactas tipo tabela de atividades -
      complementa o .chk (que e clicavel/quadrado) com uma variante so-leitura, redonda. */
@@ -7102,6 +7113,11 @@ function irParaAula(si, ai){
     setTimeout(()=> row.classList.remove('flash'), 1600);
   }, 80);
 }
+// Quais blocos do Edital estão abertos (retos, mostrando os itens) - fecha por padrão
+// porque com 84 itens espalhados por 16 blocos, tudo aberto de uma vez vira uma parede
+// só de texto. Mesma lógica de materiasAbertas na tela de Matérias: guarda só o nome do
+// bloco, então o estado sobrevive a um re-render (ex: depois de marcar teoria concluída).
+const editalBlocosAbertos = new Set();
 function renderEdital(){
   const wrap = document.getElementById('editalList');
   if(!wrap) return;
@@ -7119,11 +7135,12 @@ function renderEdital(){
   });
 
   blocos.forEach(bloco=>{
+    const aberto = editalBlocosAbertos.has(bloco.nome);
     const card = document.createElement('div');
-    card.className = 'card';
+    card.className = 'card edital-bloco-card' + (aberto?' open':'');
 
     // Calcula os dados de cada item primeiro (precisa pra ordenar pendentes-primeiro
-    // e pra mostrar o % coberto do bloco no cabeçalho).
+    // e pra mostrar o % coberto do bloco no cabeçalho, mesmo fechado).
     let blocoCobertos = 0;
     const itensCalc = bloco.itens.map(it=>{
       const teoriaTotal = it.aulas.length;
@@ -7147,7 +7164,11 @@ function renderEdital(){
     itensCalc.sort((a,b)=> (a.coberto===b.coberto) ? 0 : (a.coberto? 1 : -1));
 
     const blocoPct = bloco.itens.length ? Math.round(blocoCobertos/bloco.itens.length*100) : 0;
-    let bodyHtml = `<div class="edital-bloco-hd"><h2 style="margin:0;">${escapeHtml(bloco.nome)}</h2><div class="edital-bloco-pct">${blocoCobertos}/${bloco.itens.length} · ${blocoPct}%</div></div>`;
+    let bodyHtml = `<div class="edital-bloco-hd">
+        <div class="chev">▶</div>
+        <h2 style="margin:0;">${escapeHtml(bloco.nome)}</h2>
+        <div class="edital-bloco-pct">${blocoCobertos}/${bloco.itens.length} · ${blocoPct}%</div>
+      </div><div class="edital-bloco-body">`;
 
     itensCalc.forEach(({it, teoriaTotal, teoriaFeitas, coberto, questTotal, questDominadas, questPct})=>{
       const aulasHtml = it.aulas.map(([si,ai])=>{
@@ -7173,9 +7194,16 @@ function renderEdital(){
           </div>
         </div>`;
     });
+    bodyHtml += `</div>`;
     card.innerHTML = bodyHtml;
+    card.querySelector('.edital-bloco-hd').addEventListener('click', ()=>{
+      if(editalBlocosAbertos.has(bloco.nome)) editalBlocosAbertos.delete(bloco.nome);
+      else editalBlocosAbertos.add(bloco.nome);
+      renderEdital();
+    });
     card.querySelectorAll('.edital-aula-link').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
+      btn.addEventListener('click', (e)=>{
+        e.stopPropagation();
         irParaAula(parseInt(btn.dataset.si,10), parseInt(btn.dataset.ai,10));
       });
     });
