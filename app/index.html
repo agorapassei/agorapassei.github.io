@@ -4217,7 +4217,7 @@ const METRICS_CATALOG = [
   { id:'questoes_feitas', categoria:'Progresso', titulo:'Questões respondidas (total)', niveis:['global'], tamanho:'pequeno',
     tooltip:'Quantidade de questões distintas que você já tentou responder ao menos uma vez, em relação ao total de questões cadastradas no banco (contando só as matérias ativas no ciclo). Diferente da Taxa de Domínio: aqui conta como "feita" mesmo que você tenha errado — é uma medida de cobertura, não de acerto.' },
   { id:'ranking_materia', categoria:'Progresso', titulo:'Ranking por matéria (Taxa de Domínio)', niveis:['global'], tamanho:'grande',
-    tooltip:'Lista suas matérias ordenadas pela Taxa de Domínio, da que você mais domina para a que você menos domina — ajuda a enxergar rapidamente onde focar.' },
+    tooltip:'Lista suas matérias ordenadas pela Taxa de Domínio (dominadas ÷ total de questões do banco de cada matéria, não só as já tentadas), da que você mais domina para a que você menos domina — ajuda a enxergar rapidamente onde focar. Matérias com poucas questões respondidas ainda aparecem com percentual baixo, o que é esperado.' },
   { id:'progresso_materias', categoria:'Progresso', titulo:'Progresso de leitura por matéria', niveis:['global'], tamanho:'grande',
     tooltip:'Mostra, para cada matéria, o percentual de páginas de teoria já lidas em relação ao total de páginas daquela matéria, com uma linha de total ao final somando todas as matérias.' },
 ];
@@ -5255,12 +5255,20 @@ function buildTendenciaHtml(){
   return row('Ritmo de leitura', tT, 'pág') + row('Ritmo de resolução', tQ, 'questão');
 }
 function buildRankingHtml(){
-  const ranked = SUBJECTS.map((s,si)=> ({ si, name:s.name, ...subjectMastery(si) }))
-    .filter(r=> isSubjectActive(r.si) && r.seen>0).sort((a,b)=> b.pct-a.pct);
-  if(ranked.length===0) return '<div class="empty">Responda questões nas aulas para ver aqui em quais matérias você está dominando mais e menos.</div>';
+  // ago/2026: mesmo ajuste feito no widget "Taxa de Domínio" (ver computeWidgetValue, case
+  // 'taxa_dominio') — percentual e legenda passam a ser contra o TOTAL de questões do banco de
+  // cada matéria, não só as já tentadas. Por isso agora entram no ranking todas as matérias
+  // ativas com questões cadastradas, mesmo com 0 tentadas (aparecem com 0%, o que é esperado).
+  const ranked = SUBJECTS.map((s,si)=> {
+    const m = subjectMastery(si);
+    const total = totalQuestoesForSubject(si);
+    const pct = total? Math.round(m.dominated/total*100) : null;
+    return { si, name:s.name, dominated:m.dominated, total, pct };
+  }).filter(r=> isSubjectActive(r.si) && r.total>0 && r.pct!=null).sort((a,b)=> b.pct-a.pct);
+  if(ranked.length===0) return '<div class="empty">Cadastre questões nas aulas para ver aqui em quais matérias você está dominando mais e menos.</div>';
   return ranked.map((r,i)=>{
     const cls = r.pct>=70? 'good' : (r.pct>=50? 'mid' : 'bad');
-    return `<div class="rank-item"><div class="rn">${i+1}º</div><div class="nm2">${r.name}<small>${r.dominated}/${r.seen} questões dominadas</small></div><div class="rank-pct ${cls}">${r.pct}%</div></div>`;
+    return `<div class="rank-item"><div class="rn">${i+1}º</div><div class="nm2">${r.name}<small>${r.dominated}/${r.total} questões do banco dominadas</small></div><div class="rank-pct ${cls}">${r.pct}%</div></div>`;
   }).join('');
 }
 function buildProgressoMateriasHtml(){
