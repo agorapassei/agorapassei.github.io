@@ -1688,6 +1688,8 @@
   .ciclo-seq-row .info{flex:1;}
   .ciclo-seq-row .info b{display:block; font-size:.92rem; font-weight:750;}
   .ciclo-seq-row .info small{color:var(--text-mut); font-size:.74rem;}
+  .cs-backlog{display:inline-block; margin-top:3px; padding:1px 6px; border-radius:4px;
+    background:var(--warn-bg); color:var(--yellow-dark); font-weight:700;}
   .ciclo-seq-row .bar{margin-top:6px;}
   .ciclo-seq-row .pct{font-size:.7rem; color:var(--text-mut); text-align:right; margin-top:3px;}
   .ciclo-seq-row .chev{font-size:1rem; color:var(--text-mut);}
@@ -4382,6 +4384,32 @@ function blocoFaltaSegundos(dia, idx, b){
     return Math.max(0, precisa-disp);
   }
   return precisa;
+}
+// Soma (em segundos) dos blocos AINDA PENDENTES desta materia na semana em exibicao - usada
+// pelo selo de "backlog" na Sequencia de Estudos (ver renderCicloSequencia). Nao conta bloco
+// ja concluido, porque esse tempo ja foi "gasto" e nao representa mais compromisso da semana.
+function blocosPendentesSemanaSegundos(si){
+  const c = ensureCalendarioDefaults();
+  let total = 0;
+  DIAS_SEMANA.forEach(d=>{
+    (c.blocos[d]||[]).forEach(b=>{ if(b.si===si && !b.done) total += (b.duracaoMin||30)*60; });
+  });
+  return total;
+}
+// ago/2026 (pedido do Bruno): a Sequencia de Estudos mostra a meta CHEIA da rodada do ciclo
+// (cicloMetaSegundos), mas o Calendario da semana pode ter agendado MENOS do que essa materia
+// ainda precisa - quando a soma do deficit de todas as materias passa do orcamento semanal
+// (horasPorSemana), gerarSemanaCalendario corta um pouco de cada uma e empurra a sobra pra
+// semana seguinte (backlog "de verdade", nao bug - ver comentario em gerarSemanaCalendario).
+// Sem avisar isso, os dois numeros pareciam nao bater ("a materia mostra 1h30 mas so tem 45min
+// + 30min = 1h15 marcados na semana"). Esta funcao calcula exatamente esse buraco: quanto do
+// deficit ATUAL da materia no ciclo NAO cabe nos blocos que ainda restam pra ela nesta semana -
+// se sobrar algo, e' porque mesmo terminando tudo que esta agendado esta semana, a materia ainda
+// vai faltar pra bater a meta da rodada (o resto so aparece numa proxima semana).
+function backlogRodadaSegundos(si){
+  const deficitAgora = Math.max(0, cicloMetaSegundos(si)-cicloEstudadoSegundos(si));
+  const pendenteSemana = blocosPendentesSemanaSegundos(si);
+  return Math.max(0, deficitAgora-pendenteSemana);
 }
 // Move um bloco de (fromDia,fromIdx) pra (toDia,toIdx) - usado pelo arrastar-e-soltar.
 function moveCalendarBlock(fromDia, fromIdx, toDia, toIdx){
@@ -9433,10 +9461,15 @@ function renderCicloSequencia(){
     const estudado = cicloEstudadoSegundos(si);
     const meta = cicloMetaSegundos(si);
     const pct = cicloPct(si);
+    // ago/2026 (pedido do Bruno): quando a semana nao tem espaco pra agendar toda a meta da
+    // rodada dessa materia (backlogRodadaSegundos), avisa aqui - senao o numero da meta ("1h30")
+    // parece nao bater com os blocos do Calendario da semana (que podem somar so 1h15, por ex).
+    const backlog = backlogRodadaSegundos(si);
     return `<div class="ciclo-seq-row" style="border-left-color:${subjectColor(si)}" data-si="${si}">
       <div class="info">
         <b>${SUBJECTS[si].name}</b>
         <small>${fmtDuracao(estudado)} | ${fmtHorasMin(meta)}</small>
+        ${backlog>0?`<small class="cs-backlog">+${fmtDuracao(backlog)} não cabe nesta semana · vai pra próxima</small>`:''}
         <div class="bar sm"><i style="width:${pct}%; background:${subjectColor(si)};"></i></div>
         <div class="pct">${pct}%</div>
       </div>
