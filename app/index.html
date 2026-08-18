@@ -4297,6 +4297,14 @@ function atualizarCicloSemanaManual(){
    estudados avulsos completam um bloco de 30min e sobram 10min ja contando pro proximo bloco
    pendente daquela materia.
 
+   ago/2026, complemento (outro bug reportado pelo Bruno): materia que ja bateu 100% da rodada
+   do ciclo (cicloPct) podia continuar com bloco pendente na semana, porque cicloEstudadoSegundos
+   conta desde cicloStartedAt (que pode ser de uma semana civil anterior, se a rodada do ciclo
+   ainda nao fechou por causa de outra materia atrasada) enquanto o saldo aqui so conta sessoes
+   DENTRO da semana em exibicao. Por isso, antes de calcular saldo, qualquer bloco de materia que
+   ja fechou a rodada inteira (cicloPct>=100) e marcado concluido direto - ver o if logo no inicio
+   do loop de creditar blocos abaixo.
+
    Roda do zero a cada chamada (idempotente) — nao acumula um "saldo" separado que possa
    dessincronizar; sempre reflete exatamente as sessoes que existem agora em state.sessions.
    Um bloco marcado done NUNCA volta a pendente aqui (mesmo que uma sessao seja apagada depois
@@ -4331,6 +4339,22 @@ function sincronizarBlocosSemana(){
   DIAS_SEMANA.forEach(d=>{
     (c.blocos[d]||[]).forEach((b,idx)=>{
       if(b.done) return;
+      // ago/2026 (bug reportado pelo Bruno): "Planejamento de Controle e Producao" batia 100% na
+      // rodada do ciclo (cicloPct, medido desde cicloStartedAt) mas o bloco da semana continuava
+      // pendente na tela. Causa: cicloEstudadoSegundos soma sessoes desde cicloStartedAt, que pode
+      // ser ANTES do inicio desta semana civil (a rodada do ciclo so fecha quando TODAS as
+      // materias baterem a meta - pode atravessar mais de uma semana se alguma ficar pra tras);
+      // ja o saldo aqui em cima so conta sessoes DENTRO da janela desta semana (semanaRef..+7d).
+      // Entao uma materia podia ter estudado parte numa semana anterior (ainda dentro da mesma
+      // rodada aberta) e completar o resto agora - a rodada fecha (100%) mas o saldo SO desta
+      // semana civil pode nao cobrir sozinho o bloco. Se a materia ja fechou a rodada inteira do
+      // ciclo, nao ha mais nada a cobrar dela no calendario desta semana, entao o bloco e' dado
+      // como cumprido direto, sem depender do saldo restrito a semana.
+      if(cicloPct(b.si)>=100){
+        b.done = true;
+        mudou = true;
+        return;
+      }
       if(!primeiroPendente[b.si]) primeiroPendente[b.si] = { dia:d, idx };
       const precisa = (b.duracaoMin||30)*60;
       const disp = saldoPorMateria[b.si]||0;
