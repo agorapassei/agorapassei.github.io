@@ -1025,6 +1025,14 @@
   .cal-mes-titulo{font-size:.8rem; font-weight:800; margin-bottom:6px;}
   .cal-mes-semana-hd{display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin-bottom:4px;}
   .cal-mes-semana-hd span{font-size:.62rem; color:var(--text-mut); text-align:center; font-weight:700;}
+  /* ago/2026 (pedido do Bruno): "Calendário de estudos" (Metas) ocupava a largura inteira do
+     card com quadrados grandes demais - encolhe o card inteiro (título, filtro De/Até e a
+     grade) numa tela com espaço de sobra, pra caber em ~1/4 da área atual (metade da largura,
+     metade da altura por causa do aspect-ratio:1 dos quadrados). Em telas estreitas (celular)
+     mantém o tamanho normal - não há espaço sobrando pra economizar lá. */
+  @media (min-width:700px){
+    .card-cal-compacto{ max-width:50%; }
+  }
   .streak-box{display:flex; align-items:center; gap:14px; background:var(--yellow); border-radius:14px; padding:14px 16px; margin-bottom:16px;}
   .streak-box .flame{font-size:1.9rem;}
   .streak-box b{font-size:1.4rem; font-weight:800; color:#6b5200;}
@@ -2061,7 +2069,7 @@
       <div id="metaDataAlvoResult"></div>
     </div>
 
-    <div class="card">
+    <div class="card card-cal-compacto">
       <h2>Calendário de estudos</h2>
       <!-- ago/2026 (pedido do Bruno): trocou de um grid fixo de 14 dias pra um calendario
            mensal de verdade, com selecao de intervalo (De/Ate) - ver renderCalendarioAtividade/
