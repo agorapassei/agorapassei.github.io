@@ -1018,6 +1018,13 @@
   .heat .d{aspect-ratio:1; border-radius:8px; background:var(--border); display:flex; align-items:center; justify-content:center; font-size:.62rem; color:var(--text-mut); font-weight:700;}
   .heat .d.on{background:var(--green); color:var(--on-accent);}
   .heat .d.today{outline:2px solid var(--yellow-dark); outline-offset:1px;}
+  .heat .d.fora{opacity:.35;} /* dia do mes fora do intervalo De/Ate escolhido - ver calAtividade* */
+  .heat .d.vazio{visibility:hidden;} /* preenchimento antes do dia 1 / depois do ultimo dia do mes, so pra alinhar as colunas */
+  .cal-mes-bloco{margin-bottom:18px;}
+  .cal-mes-bloco:last-child{margin-bottom:0;}
+  .cal-mes-titulo{font-size:.8rem; font-weight:800; margin-bottom:6px;}
+  .cal-mes-semana-hd{display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin-bottom:4px;}
+  .cal-mes-semana-hd span{font-size:.62rem; color:var(--text-mut); text-align:center; font-weight:700;}
   .streak-box{display:flex; align-items:center; gap:14px; background:var(--yellow); border-radius:14px; padding:14px 16px; margin-bottom:16px;}
   .streak-box .flame{font-size:1.9rem;}
   .streak-box b{font-size:1.4rem; font-weight:800; color:#6b5200;}
@@ -1577,6 +1584,11 @@
     font-family:'Courier Prime',ui-monospace,monospace; font-size:.6875rem;
     color:var(--text-mut); text-align:right; min-width:9rem; white-space:nowrap;
   }
+  .cp-tag{
+    font-size:.625rem; font-weight:700; text-transform:uppercase; letter-spacing:.02em;
+    color:var(--text-mut); border:1px solid var(--border); border-radius:3px;
+    padding:1px 4px; margin-left:6px; vertical-align:middle;
+  }
   @media (max-width:560px){
     .ciclo-pend-item{grid-template-columns:1fr auto; gap:8px;}
     .ciclo-pend-item .cp-barra, .ciclo-pend-item .cp-pct{display:none;}
@@ -2037,6 +2049,9 @@
     <div class="card">
       <h2>Meta por data alvo <span id="tipMetaDataAlvo"></span></h2>
       <div class="settings-sub" style="margin-top:-6px;">Escolha até quando quer terminar de ler toda a teoria restante. O app calcula o ritmo necessário — em páginas/dia e em questões/dia — pra chegar lá no prazo, com base no seu ritmo atual.</div>
+      <!-- "Data de início" (ago/2026, pedido do Bruno): mostra a partir de quando o ritmo
+           atual (páginas/dia, questões/dia) está sendo medido - ver dataInicioPlanejamentoISO. -->
+      <div id="metaDataInicioLbl" style="font-size:.76rem; color:var(--text-mut); margin-bottom:10px;"></div>
       <div class="form-row" style="margin-bottom:10px;">
         <label>Terminar até</label>
         <input type="date" id="metaDataAlvo">
@@ -2045,8 +2060,15 @@
     </div>
 
     <div class="card">
-      <h2>Últimos 14 dias</h2>
-      <div class="heat" id="heatGrid"></div>
+      <h2>Calendário de estudos</h2>
+      <!-- ago/2026 (pedido do Bruno): trocou de um grid fixo de 14 dias pra um calendario
+           mensal de verdade, com selecao de intervalo (De/Ate) - ver renderCalendarioAtividade/
+           buildMesCalendarioHtml. Sem selecao, mostra o mes corrente inteiro. -->
+      <div class="form-row" style="display:flex; gap:8px; margin-bottom:12px;">
+        <div style="flex:1;"><label style="font-size:.7rem; color:var(--text-mut);">De</label><input type="date" id="calAtividadeDe"></div>
+        <div style="flex:1;"><label style="font-size:.7rem; color:var(--text-mut);">Até</label><input type="date" id="calAtividadeAte"></div>
+      </div>
+      <div id="calAtividadeMeses"></div>
     </div>
   </section>
 
@@ -2136,6 +2158,12 @@
       <div class="card">
         <h2 style="margin:0 0 2px;">Calendário da semana <span id="tipCalendarioSemana"></span></h2>
         <div style="font-size:.74rem; color:var(--text-mut); margin-bottom:10px;" id="calSemanaLabel"></div>
+        <!-- Botao "Atualizar ciclo" (ago/2026): so aparece a partir da 2a-feira em que a
+             semana em tela ficou desatualizada, e some assim que usado - ver
+             calendarioDesatualizado()/atualizarCicloSemanaManual() em index.html. -->
+        <button type="button" class="btn block" id="btnAtualizarCicloSemana" hidden style="margin-bottom:10px; background:var(--yellow-dark, var(--green-dark));">
+          <svg class=ic-svg aria-hidden=true><use href=#ic-restart></use></svg> Atualizar ciclo pra esta semana
+        </button>
         <div class="cal-grid" id="calGrid"></div>
       </div>
       <div class="ciclo-actions">
@@ -2151,7 +2179,19 @@
       </div>
       <div class="card">
         <h2>Ciclo</h2>
-        <div id="cicloDonutWrap"></div>
+        <!-- Segunda rosca "Restante" (ago/2026, pedido do Bruno): ao lado da rosca de sempre
+             (total planejado da semana, fatiado por materia), uma segunda rosca com o que
+             ainda falta estudar de cada materia - ver buildCicloDonutRestanteHtml. -->
+        <div class="ciclo-donuts-row" style="display:flex; gap:18px; align-items:flex-start; justify-content:center; flex-wrap:wrap;">
+          <div style="text-align:center;">
+            <div id="cicloDonutWrap"></div>
+            <div style="font-size:.72rem; color:var(--text-mut); margin-top:4px; font-weight:700;">Total planejado</div>
+          </div>
+          <div style="text-align:center;">
+            <div id="cicloDonutRestanteWrap"></div>
+            <div style="font-size:.72rem; color:var(--text-mut); margin-top:4px; font-weight:700;">Restante</div>
+          </div>
+        </div>
         <div id="cicloLegend" class="ciclo-legend"></div>
       </div>
       <details class="card recolhivel">
@@ -2279,6 +2319,25 @@
     <div class="stov-clock" id="stovClock">00:00:00</div>
     <div class="stov-progress"><i id="stovProgressBar"></i></div>
     <div class="stov-phase" id="stovPhase"></div>
+    <button type="button" id="stovTimerEdit" hidden style="background:none; border:none; color:var(--text-mut); font-size:.75rem; text-decoration:underline; cursor:pointer; margin:2px 0 0;">editar tempo do timer</button>
+    <!-- Escolha do tempo-alvo do modo "Timer" (ago/2026): o botao "Timer" ja existia no HTML
+         (stov-modes) mas nunca tinha JS por tras - virou o gancho natural pro pedido do Bruno
+         de escolher quanto tempo estudar e tocar um alarme ao bater. Ver sessionModoInfo,
+         sessionPhaseSerial, checkSessionAlarme. -->
+    <div class="stov-timer-picker" id="stovTimerPicker" hidden style="margin:8px 0; text-align:center;">
+      <div style="font-size:.85rem; color:var(--text-mut); margin-bottom:8px;">Quanto tempo quer estudar nesta seção?</div>
+      <div id="stovTimerChips" style="display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin-bottom:8px;">
+        <button type="button" class="btn" data-min="15" style="padding:6px 12px; flex:none;">15min</button>
+        <button type="button" class="btn" data-min="25" style="padding:6px 12px; flex:none;">25min</button>
+        <button type="button" class="btn" data-min="45" style="padding:6px 12px; flex:none;">45min</button>
+        <button type="button" class="btn" data-min="60" style="padding:6px 12px; flex:none;">60min</button>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center; justify-content:center;">
+        <input type="number" id="stovTimerCustomMin" min="1" max="600" placeholder="outro (min)" style="width:110px; text-align:center;">
+        <button type="button" class="btn" id="stovTimerConfirm" style="flex:none;">Iniciar timer</button>
+      </div>
+    </div>
+    <button type="button" class="stov-btn" id="stovAlarmSilence" hidden style="background:var(--red, #c0392b); color:#fff; margin-bottom:6px;">🔔 Alarme tocando — toque pra silenciar</button>
     <div class="stov-actions">
       <button type="button" class="stov-btn play" id="stovPlayBtn" title="Pausar"><svg class=ic-svg aria-hidden=true><use href=#ic-pause></use></svg></button>
       <button type="button" class="stov-btn stop" id="stovStopBtn"><svg class=ic-svg aria-hidden=true><use href=#ic-stop></use></svg> Encerrar sessão</button>
@@ -2947,6 +3006,9 @@ function migrateState(s){
   if(!s.settings.pomodoro) s.settings.pomodoro = { focusMin:30, breakMin:10 };
   if(!(s.settings.pomodoro.focusMin>0)) s.settings.pomodoro.focusMin = 30;
   if(!(s.settings.pomodoro.breakMin>0)) s.settings.pomodoro.breakMin = 10;
+  // Ultimo tempo-alvo usado no modo "Timer" do cronometro (ago/2026) - so pra prefill do
+  // picker (stovTimerPicker); nao afeta calculo nenhum. Ver setSessionTimerAlvo.
+  if(!s.settings.timer) s.settings.timer = { lastMin:25 };
   /* Migracao unica do redesign (ago/2026). Trocar o default nao bastava: quem ja
      tinha estado salvo continuava com accent 'terracota' e tema claro, e a paleta
      nova nunca aparecia. Roda UMA vez, marcada por flag, e depois a escolha do
@@ -2967,6 +3029,10 @@ function migrateState(s){
   // ciclos fechados a partir de agora entram na linha do tempo (não dá pra reconstituir os
   // ciclos anteriores que não foram logados).
   if(!Array.isArray(s.historicoCiclos)) s.historicoCiclos = [];
+  // Historico SEMANAL (ver registrarHistoricoSemana) - ago/2026, botao "Atualizar ciclo".
+  // Mesma logica do historicoCiclos: backups antigos comecam vazio, so semanas fechadas a
+  // partir de agora (via o botao) entram aqui.
+  if(!Array.isArray(s.historicoSemanas)) s.historicoSemanas = [];
   if(!s.favorites) s.favorites = {}; // questoes favoritadas (qid -> true), ver toggleFavorite()
   if(s.onboarding===undefined) s.onboarding = null; // respostas do assistente (ver openOnboarding)
   /* Etapa de exercícios (adicionada depois): antes existiam 3 estágios (0,1,2 = as três
@@ -3165,6 +3231,7 @@ function endActiveSession(extra){
   // extra: { paginaFim } para teoria, ou { questoesCount, questoesCorrect } (fallback manual) para questoes
   const a = state.activeSession;
   if(!a) return null;
+  stopAlarmLoop(); // sessao encerrada nao deixa alarme tocando sozinho (ver ALARME SONORO DO CRONOMETRO)
   const tempoLiquidoSegundos = Math.round(activeSessionElapsedMs()/1000);
   const sessao = {
     id: a.id, materiaIdx: a.si, apostilaIdx: a.ai, tipo: a.tipo,
@@ -3195,31 +3262,21 @@ function endActiveSession(extra){
   }
   state.sessions.push(sessao); // conta pra todas as metricas gerais de tempo e pro Ciclo (cicloEstudadoSegundos etc.) independente de ter vindo do calendario e de ter batido os 30min ou nao - ver comentario abaixo
   state.activeSession = null;
-  // Se essa sessao nasceu de um clique num bloco do Calendario da Semana, marca aquele
-  // bloco especifico como concluido - MAS so se o tempo liquido bateu a duracao cheia do
-  // bloco (30 ou 45min - ver duracaoMin/decomporMateriaEmItens) numa unica sessao. Encerrou antes da hora: o bloco
-  // continua em aberto (o usuario pode clicar nele de novo depois pra tentar bater o tempo
-  // completo; nao acumula tempo parcial entre sessoes diferentes - de proposito, pra manter
-  // simples). Isso so afeta a marcacao visual "concluido" do bloco - o tempo estudado, mesmo
-  // parcial, ja foi contado ali em cima (state.sessions.push), entao sempre entra nas
-  // metricas gerais de Tempo e no progresso do Ciclo (cicloEstudadoSegundos), tenha batido a
-  // duracao do bloco ou nao. Sessao iniciada pelo fluxo normal (Materias, Puxar sessao agora)
-  // nao mexe em bloco nenhum.
-  if(activeSessionCalendarRef){
-    const c = state.calendario;
-    const bloco = c && c.blocos[activeSessionCalendarRef.dia] && c.blocos[activeSessionCalendarRef.dia][activeSessionCalendarRef.idx];
-    if(bloco && bloco.si===a.si && tempoLiquidoSegundos >= (bloco.duracaoMin||30)*60){
-      bloco.done = true;
-      bloco.sessionId = sessao.id;
-    }
-    activeSessionCalendarRef = null;
-  }
+  // ago/2026 (bug reportado pelo Bruno): antes, so a sessao nascida de um clique NUM BLOCO
+  // especifico do Calendario da Semana marcava aquele bloco como concluido - uma sessao pela
+  // aba Materia contava certinho pro Ciclo geral, mas a visao semanal nao "descontava" nada
+  // visualmente. Agora sincronizarBlocosSemana() roda depois de QUALQUER sessao (veio de
+  // bloco ou nao) e credita, em ordem, os blocos pendentes da materia com o tempo estudado
+  // na semana inteira - ver comentario da funcao pra regra completa.
+  activeSessionCalendarRef = null;
   markActivity();
   save();
+  sincronizarBlocosSemana();
   checkCicloCompletion();
   return sessao;
 }
 function cancelActiveSession(){
+  stopAlarmLoop(); // sessao cancelada nao deixa alarme tocando sozinho (ver ALARME SONORO DO CRONOMETRO)
   state.activeSession = null;
   activeSessionCalendarRef = null;
   save();
@@ -3243,6 +3300,7 @@ function addManualSession(si, ai, tipo, minutos, extra){
   state.sessions.push(sessao);
   markActivity();
   save();
+  sincronizarBlocosSemana(); // lancamento manual tambem credita blocos pendentes da semana - ver comentario da funcao
   checkCicloCompletion();
   return sessao;
 }
@@ -3441,6 +3499,10 @@ function distribuicaoTempoPorMateria(){
 }
 function consistencia(diasPeriodo){
   diasPeriodo = diasPeriodo||30;
+  // ago/2026 (mesmo bug/correcao de ritmoAtualPaginasDia): nao dilui a media por dias
+  // ANTERIORES ao inicio do planejamento - ver diasDesdeInicioPlanejamento().
+  const diasReais = diasDesdeInicioPlanejamento();
+  if(diasReais!=null) diasPeriodo = Math.min(diasPeriodo, diasReais);
   const today = todayStr();
   let diasComSessao=0, tempoTotal=0;
   for(let i=0;i<diasPeriodo;i++){
@@ -3753,6 +3815,19 @@ function registrarHistoricoCiclo(fimTs, completo){
 // fechado. >20% acima da meta: reduz um pouco a prioridade (precisa de menos reforço). >30%
 // abaixo: aumenta um pouco. Dentro dessa faixa, sem ajuste (1 = neutro).
 function fatorAjusteDesvio(si){
+  // ago/2026: o historico SEMANAL (registrarHistoricoSemana, alimentado pelo botao "Atualizar
+  // ciclo") e mais recente que o historico de CICLO inteiro (que so fecha de tempos em tempos),
+  // entao tem prioridade quando existir dado pra essa materia.
+  const histSemanas = state.historicoSemanas;
+  if(histSemanas && histSemanas.length){
+    const ultimaSemana = histSemanas[histSemanas.length-1];
+    const dSemana = ultimaSemana.desvios ? ultimaSemana.desvios[si] : null;
+    if(dSemana!=null){
+      if(dSemana >= 1.2) return 0.85;
+      if(dSemana <= 0.7) return 1.2;
+      return 1;
+    }
+  }
   const hist = state.historicoCiclos;
   if(!hist || !hist.length) return 1;
   const ultimo = hist[hist.length-1];
@@ -4119,12 +4194,170 @@ function gerarSemanaCalendario(forcar){
   }
   save();
 }
-// Chamada no render da aba Ciclo: garante que a semana em tela corresponde a semana-calendario
-// atual, gerando a proxima automaticamente quando a segunda-feira vira.
+// ago/2026 (pedido do Bruno): antes, a virada de semana era 100% automatica e silenciosa,
+// disparada no primeiro render da aba Ciclo depois da 2a-feira virar - so que ela so roda
+// quando esse render acontece, e um PWA "retomado" (sem reload de verdade) pode nunca chamar
+// esse render de novo sozinho, entao a virada as vezes simplesmente nao acontecia (bug
+// reportado). Correcao: virada de semana deixou de ser silenciosa - vira uma ACAO DELIBERADA
+// via botao "Atualizar ciclo" (ver atualizarCicloSemanaManual/btnAtualizarCicloSemana),
+// visivel a partir do momento em que a semana em tela fica desatualizada (ou seja, a partir da
+// 2a-feira seguinte) ate ser usado. checkCalendarioRollover so continua gerando sozinho no
+// caso em que NUNCA houve semana nenhuma ainda (ciclo recem-criado) ou o algoritmo mudou de
+// versao - nesses dois casos nao ha "semana anterior" pra registrar desvio nenhum, entao nao
+// faz sentido bloquear atras do botao.
 function checkCalendarioRollover(){
   const c = ensureCalendarioDefaults();
-  const segunda = segundaFeiraDe(todayStr());
-  if(c.semanaRef!==segunda || c.algoVersion!==CALENDARIO_ALGO_VERSION) gerarSemanaCalendario(true);
+  if(!c.semanaRef || c.algoVersion!==CALENDARIO_ALGO_VERSION) gerarSemanaCalendario(true);
+}
+// true a partir da 2a-feira em que a semana gerada (c.semanaRef) ja nao e mais a semana atual -
+// eh essa condicao que liga o botao "Atualizar ciclo" (ver HTML de #btnAtualizarCicloSemana).
+function calendarioDesatualizado(){
+  const c = ensureCalendarioDefaults();
+  return !!c.semanaRef && c.semanaRef!==segundaFeiraDe(todayStr());
+}
+/* ===================== HISTORICO SEMANAL (ajuste de peso semana a semana) =====================
+   Espelha registrarHistoricoCiclo/fatorAjusteDesvio (que so rodam quando um CICLO inteiro
+   fecha, podendo levar varias semanas), mas na granularidade de UMA semana - eh o que alimenta
+   o "reajustar pesos" do botao "Atualizar ciclo" (opcao escolhida pelo Bruno: o botao regenera
+   os blocos da semana E reajusta os pesos das materias sem override manual, com base em como
+   foi a semana que terminou). Chamado por atualizarCicloSemanaManual() ANTES de
+   gerarSemanaCalendario() regenerar c.blocos/c.semanaRef, pra registrar o desvio da semana que
+   esta terminando (planejado = soma da duracao de todos os blocos daquela materia na semana;
+   estudado = soma real das sessoes daquela materia dentro do intervalo da semana). */
+function registrarHistoricoSemana(){
+  const c = ensureCalendarioDefaults();
+  if(!c.semanaRef) return null;
+  const inicioMs = new Date(c.semanaRef+'T00:00:00').getTime();
+  const fimMs = inicioMs + 7*86400000;
+  const planejadoPorMateria = {};
+  DIAS_SEMANA.forEach(d=>{
+    (c.blocos[d]||[]).forEach(b=>{ planejadoPorMateria[b.si] = (planejadoPorMateria[b.si]||0) + (b.duracaoMin||30)*60; });
+  });
+  const estudadoPorMateria = {};
+  state.sessions.forEach(s=>{
+    if(s.timestampFim>=inicioMs && s.timestampFim<fimMs){
+      estudadoPorMateria[s.materiaIdx] = (estudadoPorMateria[s.materiaIdx]||0) + s.tempoLiquidoSegundos;
+    }
+  });
+  const desvios = {};
+  Object.keys(planejadoPorMateria).forEach(siStr=>{
+    const si = Number(siStr);
+    const planejado = planejadoPorMateria[si];
+    if(planejado<=0) return;
+    desvios[si] = (estudadoPorMateria[si]||0)/planejado;
+  });
+  if(!Array.isArray(state.historicoSemanas)) state.historicoSemanas = [];
+  const registro = { id: uid(), inicio: inicioMs, fim: Date.now(), semanaRef: c.semanaRef, desvios };
+  state.historicoSemanas.push(registro);
+  if(state.historicoSemanas.length>26) state.historicoSemanas.splice(0, state.historicoSemanas.length-26); // so as ultimas ~6 meses importam
+  save();
+  return registro;
+}
+// Mesma redacao de ajustePorDesvioTexto, mas pra um registro SEMANAL (evita a frase "no
+// proximo ciclo", que ficaria errada aqui).
+function ajusteSemanaTexto(registro){
+  if(!registro || !registro.desvios) return null;
+  const linhas = [];
+  Object.keys(registro.desvios).forEach(siStr=>{
+    const si = Number(siStr);
+    const d = registro.desvios[si];
+    const nome = SUBJECTS[si].name;
+    if(d >= 1.2){
+      linhas.push(nome+': você estudou '+Math.round((d-1)*100)+'% a mais que o planejado na semana passada — reduzimos um pouco a prioridade dela nesta semana.');
+    } else if(d <= 0.7){
+      linhas.push(nome+': ficou '+Math.round((1-d)*100)+'% abaixo do planejado na semana passada — aumentamos um pouco a prioridade dela nesta semana.');
+    }
+  });
+  return linhas.length ? linhas : null;
+}
+// Clique no botao "Atualizar ciclo" (so visivel quando calendarioDesatualizado()). Ordem
+// importa: registra o desvio da semana que esta terminando ANTES de gerarSemanaCalendario
+// sobrescrever c.blocos/c.semanaRef - so depois disso os pesos sugeridos (pesoSugerido/
+// fatorAjusteDesvio) refletem o ajuste, e a regeneracao dos blocos ja usa os pesos novos.
+function atualizarCicloSemanaManual(){
+  const registro = registrarHistoricoSemana();
+  gerarSemanaCalendario(true);
+  renderPlanejamento();
+  const ajuste = ajusteSemanaTexto(registro);
+  toast(ajuste
+    ? `Ciclo atualizado pra esta semana. Peso ajustado em ${ajuste.length} matéria${ajuste.length===1?'':'s'} (veja em Replanejar).`
+    : 'Ciclo atualizado pra esta semana.');
+}
+/* ===================== SINCRONIA DO CALENDARIO COM QUALQUER SESSAO (ago/2026) =====================
+   Bug reportado pelo Bruno: estudar uma materia pela aba Materia (fora do fluxo "clicar num
+   bloco") nao eliminava nada da visao semanal, mesmo o tempo ja contando certinho pro Ciclo
+   geral (cicloEstudadoSegundos). Antes, so a sessao nascida de um clique NUM BLOCO especifico
+   marcava aquele bloco como concluido.
+
+   Solucao escolhida (confirmada com o Bruno): credito automatico e cumulativo. A cada sessao
+   registrada (de qualquer origem - cronometro por bloco, cronometro avulso pela aba Materia,
+   ou lancamento manual), somamos TODO o tempo estudado daquela materia DENTRO da semana em
+   exibicao (c.semanaRef ate 7 dias depois) e vamos marcando como concluido, em ordem (do
+   primeiro bloco pendente da semana pro ultimo), tudo que esse saldo cobrir. Ex.: 40min
+   estudados avulsos completam um bloco de 30min e sobram 10min ja contando pro proximo bloco
+   pendente daquela materia.
+
+   Roda do zero a cada chamada (idempotente) — nao acumula um "saldo" separado que possa
+   dessincronizar; sempre reflete exatamente as sessoes que existem agora em state.sessions.
+   Um bloco marcado done NUNCA volta a pendente aqui (mesmo que uma sessao seja apagada depois
+   e o saldo caia) - so gerarSemanaCalendario (virada de semana ou "Atualizar ciclo") comeca
+   uma semana do zero. */
+// Preenchido a cada chamada de sincronizarBlocosSemana() - NAO persistido (so pra alimentar o
+// tooltip "faltam Xmin" de cada bloco pendente, ver blocoFaltaSegundos/renderCalendario).
+// saldoAposConsumo: quanto sobrou do tempo estudado da materia essa semana, depois de "pagar"
+// todos os blocos ja concluidos - esse saldo cobre só o PRIMEIRO bloco pendente de cada
+// matéria (se não fosse suficiente pra completá-lo, ele não teria virado 'done' acima).
+let _ultimoCreditoSemana = { saldoAposConsumo:{}, primeiroPendente:{} };
+function sincronizarBlocosSemana(){
+  const c = ensureCalendarioDefaults();
+  if(!c.semanaRef) return;
+  const inicioSemanaMs = new Date(c.semanaRef+'T00:00:00').getTime();
+  const fimSemanaMs = inicioSemanaMs + 7*86400000;
+  const saldoPorMateria = {};
+  state.sessions.forEach(s=>{
+    if(s.timestampFim>=inicioSemanaMs && s.timestampFim<fimSemanaMs){
+      saldoPorMateria[s.materiaIdx] = (saldoPorMateria[s.materiaIdx]||0) + s.tempoLiquidoSegundos;
+    }
+  });
+  // Blocos ja concluidos (inclusive de antes desta chamada) tambem consomem saldo, senao o
+  // mesmo tempo creditaria o bloco de novo e ainda sobraria pro proximo.
+  DIAS_SEMANA.forEach(d=>{
+    (c.blocos[d]||[]).forEach(b=>{
+      if(b.done) saldoPorMateria[b.si] = (saldoPorMateria[b.si]||0) - (b.duracaoMin||30)*60;
+    });
+  });
+  let mudou = false;
+  const primeiroPendente = {};
+  DIAS_SEMANA.forEach(d=>{
+    (c.blocos[d]||[]).forEach((b,idx)=>{
+      if(b.done) return;
+      if(!primeiroPendente[b.si]) primeiroPendente[b.si] = { dia:d, idx };
+      const precisa = (b.duracaoMin||30)*60;
+      const disp = saldoPorMateria[b.si]||0;
+      if(disp >= precisa){
+        b.done = true;
+        saldoPorMateria[b.si] = disp - precisa;
+        mudou = true;
+        delete primeiroPendente[b.si]; // esse virou done - o proximo loop encontra o de verdade
+      }
+    });
+  });
+  if(mudou) save();
+  _ultimoCreditoSemana = { saldoAposConsumo: saldoPorMateria, primeiroPendente };
+}
+// Quanto falta (em segundos) pra completar UM bloco especifico, considerando o credito
+// cumulativo do saldo da semana - so o primeiro bloco pendente de cada materia pode ter
+// credito parcial (ver comentario de sincronizarBlocosSemana); os demais mostram o tempo
+// cheio. Chamar sempre DEPOIS de sincronizarBlocosSemana() (renderCalendario garante isso).
+function blocoFaltaSegundos(dia, idx, b){
+  const precisa = (b.duracaoMin||30)*60;
+  if(b.done) return 0;
+  const pp = _ultimoCreditoSemana.primeiroPendente[b.si];
+  if(pp && pp.dia===dia && pp.idx===idx){
+    const disp = Math.max(0, _ultimoCreditoSemana.saldoAposConsumo[b.si]||0);
+    return Math.max(0, precisa-disp);
+  }
+  return precisa;
 }
 // Move um bloco de (fromDia,fromIdx) pra (toDia,toIdx) - usado pelo arrastar-e-soltar.
 function moveCalendarBlock(fromDia, fromIdx, toDia, toIdx){
@@ -5234,8 +5467,11 @@ function buildEstudoSemanalHtml(modo, numDias){
 }
 function buildConsistenciaHtml(){
   const c = consistencia(30);
+  // ago/2026: o rotulo mostra o periodo REAL usado (c.diasPeriodo, ja limitado aos dias desde
+  // o inicio do planejamento quando for o caso - ver consistencia()), nao um "30d" fixo que
+  // ficaria errado pra quem comecou a acompanhar ha menos de 30 dias.
   return `<div class="consist-grid">
-    <div class="stat-box"><b>${c.diasComSessao}/${c.diasPeriodo}</b><span>Dias estudados (30d)</span></div>
+    <div class="stat-box"><b>${c.diasComSessao}/${c.diasPeriodo}</b><span>Dias estudados (${c.diasPeriodo}d)</span></div>
     <div class="stat-box"><b>${fmtDuracao(c.tempoMedioDiarioSegundos)}</b><span>Média por dia</span></div>
   </div>`;
 }
@@ -5549,8 +5785,11 @@ function filaHojeHtml(){
         else          itens.push({si,ai,cod,subj:s.name,nome,est:'futuro', rot:etapa,num:'em '+(-d)+'d',    ord:200-d,    fora});
       } else if(!rec.studied && (rec.pagesRead||0) > 0){
         const t = theoryPages(si,ai);
+        // ago/2026 (pedido do Bruno): mostra tambem o tempo ja estudado dessa aula, nao so a
+        // contagem de paginas - mesma fonte usada no resto do app (tempoTotalTeoriaApostila).
+        const tempoAula = tempoTotalTeoriaApostila(si,ai);
         itens.push({si,ai,cod,subj:s.name,nome,est:'leitura',rot:'leitura',
-                    num:rec.pagesRead+'/'+t+' pág', ord:-(rec.pagesRead/t), fora});
+                    num:rec.pagesRead+'/'+t+' pág'+(tempoAula>0?' · '+fmtDuracao(tempoAula):''), ord:-(rec.pagesRead/t), fora});
       }
     });
   });
@@ -5592,15 +5831,16 @@ function ciclosPendentesHtml(){
   const c = state.ciclo;
   if(!c || !c.horasPorSemana || cicloPesoTotal() <= 0) return '';
 
-  const linhas = SUBJECTS.map((s,si)=>({ s, si }))
+  const todas = SUBJECTS.map((s,si)=>({ s, si }))
     .filter(({si}) => isSubjectActive(si) && getCicloPeso(si) > 0)
     .map(({s,si}) => {
       const meta = cicloMetaSegundos(si);
       const feito = cicloEstudadoSegundos(si);
-      return { s, si, falta: Math.max(0, meta - feito), pct: Math.min(100, cicloPct(si)) };
-    })
-    .filter(x => x.pct < 100)
-    .sort((a,b) => b.falta - a.falta);   // maior lacuna primeiro
+      return { s, si, feito, falta: Math.max(0, meta - feito), pct: Math.min(100, cicloPct(si)) };
+    });
+
+  const linhas = todas.filter(x => x.pct < 100).sort((a,b) => b.falta - a.falta);   // maior lacuna primeiro
+  const concluidas = todas.filter(x => x.pct >= 100);
 
   /* Soma só as lacunas POSITIVAS. Usar meta total menos estudado total dava "faltam
      0s" no cabeçalho enquanto as linhas somavam horas: quem passou da meta gerava
@@ -5608,20 +5848,30 @@ function ciclosPendentesHtml(){
      de uma matéria não cobre a falta de outra. */
   const faltaTotal = linhas.reduce((a,x)=> a + x.falta, 0);
 
+  const blocoConcluidas = concluidas.length ? `
+    <div class="hib-grupo">concluídas neste ciclo · ${concluidas.length} ${concluidas.length===1?'matéria':'matérias'}</div>
+    <div class="ciclo-pend">${concluidas.map(x=>`
+      <button type="button" class="ciclo-pend-item" data-si="${x.si}">
+        <span class="cp-nm">${escapeHtml(x.s.name)}</span>
+        <span class="cp-barra" aria-hidden="true"><i style="width:100%"></i></span>
+        <span class="cp-pct">100%</span>
+        <span class="cp-det">concluída</span>
+      </button>`).join('')}</div>` : '';
+
   if(!linhas.length){
     return `<div class="hib-grupo">ciclo atual</div>
       <div class="hib-vazio"><b>Ciclo fechado.</b>
       Todas as matérias do ciclo bateram a meta de horas. O próximo ciclo começa
-      sozinho na próxima sessão registrada.</div>`;
+      sozinho na próxima sessão registrada.</div>${blocoConcluidas}`;
   }
   return `<div class="hib-grupo">ciclo atual · faltam ${fmtDuracao(faltaTotal)} em ${linhas.length} ${linhas.length===1?'matéria':'matérias'}</div>
     <div class="ciclo-pend">${linhas.map(x=>`
       <button type="button" class="ciclo-pend-item" data-si="${x.si}">
-        <span class="cp-nm">${escapeHtml(x.s.name)}</span>
+        <span class="cp-nm">${escapeHtml(x.s.name)}${x.feito<=0?' <span class="cp-tag">não iniciada</span>':''}</span>
         <span class="cp-barra" aria-hidden="true"><i style="width:${x.pct}%"></i></span>
         <span class="cp-pct">${x.pct}%</span>
         <span class="cp-det">faltam ${fmtDuracao(x.falta)}</span>
-      </button>`).join('')}</div>`;
+      </button>`).join('')}</div>${blocoConcluidas}`;
 }
 
 function renderHibrido(){
@@ -6979,18 +7229,45 @@ function registrarRevisaoAvulsa(si, ai, qualidade){
 // diretamente, e replanejar só grava state.metaDataAlvo (ver listener de #metaDataAlvo).
 // Janela de 30 dias corridos (não só dias com atividade): reflete frequência real, não
 // só o quanto rendeu nos dias em que abriu o app.
+// Data de início do PLANEJAMENTO (ago/2026, pedido do Bruno): usamos a data em que o Ciclo
+// atual foi criado (cicloStartedAt) - é o "início do acompanhamento" na prática, já usado em
+// toda métrica de Ciclo (cicloEstudadoSegundos etc.). Sem ciclo criado ainda, retorna null e
+// as métricas de ritmo caem no comportamento antigo (janela fixa).
+function dataInicioPlanejamentoISO(){
+  const c = state.ciclo;
+  if(!c || !c.cicloStartedAt) return null;
+  return new Date(c.cicloStartedAt).toISOString().slice(0,10);
+}
+// Quantos dias corridos se passaram desde o início do planejamento, contando o próprio dia
+// de início como dia 1 (nunca 0, pra não gerar divisão por zero em quem criou o ciclo hoje).
+function diasDesdeInicioPlanejamento(){
+  const iso = dataInicioPlanejamentoISO();
+  if(!iso) return null;
+  const dias = Math.round((new Date(todayStr()+'T00:00:00') - new Date(iso+'T00:00:00'))/86400000) + 1;
+  return Math.max(1, dias);
+}
+// ago/2026 (bug reportado pelo Bruno): a janela de 30 dias corridos, sozinha, diluía o ritmo
+// por dias ANTERIORES ao início do planejamento (ex.: plano criado há 5 dias sempre dividia por
+// 30, mesmo sem ter existido nos outros 25) - o número saía baixo demais, sem relação com o
+// ritmo real. Agora o divisor é o menor entre a janela pedida e os dias reais desde o início -
+// continua contando dias sem atividade DENTRO da janela real (não vira "média só dos dias que
+// estudei"), só não pune por dias em que o plano nem existia ainda.
 function ritmoAtualPaginasDia(diasJanela){
   diasJanela = diasJanela>0 ? diasJanela : 30;
+  const diasReais = diasDesdeInicioPlanejamento();
+  const divisor = diasReais!=null ? Math.min(diasJanela, diasReais) : diasJanela;
   const hoje = todayStr();
   let soma = 0;
-  for(let i=0;i<diasJanela;i++){ soma += state.pageActivity[addDays(hoje,-i)] || 0; }
-  return soma/diasJanela;
+  for(let i=0;i<divisor;i++){ soma += state.pageActivity[addDays(hoje,-i)] || 0; }
+  return soma/divisor;
 }
 function ritmoAtualQuestoesDia(diasJanela){
   diasJanela = diasJanela>0 ? diasJanela : 30;
-  const corte = addDays(todayStr(), -(diasJanela-1));
+  const diasReais = diasDesdeInicioPlanejamento();
+  const divisor = diasReais!=null ? Math.min(diasJanela, diasReais) : diasJanela;
+  const corte = addDays(todayStr(), -(divisor-1));
   const qtd = (state.answerLog||[]).filter(a=> a.d>=corte).length;
-  return qtd/diasJanela;
+  return qtd/divisor;
 }
 function metaDataAlvoCalc(dataAlvo){
   if(!dataAlvo) return null;
@@ -7032,6 +7309,14 @@ function renderMetaDataAlvo(){
   if(tip) tip.innerHTML = tipIcon('meta_data_alvo');
   const input = document.getElementById('metaDataAlvo');
   const wrap = document.getElementById('metaDataAlvoResult');
+  const inicioLbl = document.getElementById('metaDataInicioLbl');
+  if(inicioLbl){
+    const iso = dataInicioPlanejamentoISO();
+    const dias = diasDesdeInicioPlanejamento();
+    inicioLbl.textContent = iso
+      ? `Data de início do planejamento: ${fmtDate(iso)} (${dias} dia${dias===1?'':'s'} de acompanhamento) — o ritmo atual abaixo é medido a partir daqui, nunca de antes.`
+      : '';
+  }
   if(!input || !wrap) return;
   input.value = state.metaDataAlvo || '';
   if(!state.metaDataAlvo){
@@ -7087,18 +7372,73 @@ function renderMetas(){
   document.getElementById('streakBig').textContent = streak+(streak===1?' dia':' dias');
 
   renderMetaDataAlvo();
-
-  const heat = document.getElementById('heatGrid');
-  heat.innerHTML = "";
-  for(let i=13;i>=0;i--){
-    const d = addDays(today, -i);
-    const cell = document.createElement('div');
-    cell.className='d'+(state.activity[d]?' on':'')+(d===today?' today':'');
-    setRotulo(cell, d.slice(8,10));
-    heat.appendChild(cell);
-  }
+  renderCalendarioAtividade();
   wireTooltips(document.getElementById('view-metas'));
 }
+const MESES_LABEL = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+// Um mes inteiro do calendario de atividade (reaproveita as classes .heat/.d ja usadas no
+// heatmap antigo - so ganhou 'fora' pros dias fora do intervalo De/Ate e 'vazio' pro
+// preenchimento antes do dia 1 / depois do ultimo dia, pra alinhar as colunas com DIAS_SEMANA
+// (Seg..Dom, mesma convencao do Calendario da Semana do Ciclo)).
+function buildMesCalendarioHtml(ano, mes, deStr, ateStr){ // mes: 0-11
+  const diasNoMes = new Date(ano, mes+1, 0).getDate();
+  const dowPrimeiro = (new Date(ano, mes, 1).getDay()+6)%7; // 0=seg..6=dom
+  const hojeIso = todayStr();
+  let celulas = '';
+  for(let i=0;i<dowPrimeiro;i++) celulas += `<div class="d vazio"></div>`;
+  for(let dia=1; dia<=diasNoMes; dia++){
+    const iso = `${ano}-${String(mes+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
+    const dentroRange = (!deStr || iso>=deStr) && (!ateStr || iso<=ateStr);
+    const estudou = !!state.activity[iso];
+    const cls = 'd'+(dentroRange?'':' fora')+(estudou?' on':'')+(iso===hojeIso?' today':'');
+    celulas += `<div class="${cls}" title="${fmtDate(iso)}${estudou?' — dia com estudo registrado':''}">${dia}</div>`;
+  }
+  return `<div class="cal-mes-bloco">
+    <div class="cal-mes-titulo">${MESES_LABEL[mes]} de ${ano}</div>
+    <div class="cal-mes-semana-hd">${DIAS_SEMANA.map(d=>`<span>${DIAS_SEMANA_LABEL[d]}</span>`).join('')}</div>
+    <div class="heat">${celulas}</div>
+  </div>`;
+}
+// Estado do filtro De/Ate - nao persiste em state de proposito (e so um filtro de visualizacao,
+// nao um dado do usuario); reabre sempre no mes corrente.
+let calAtividadeDe = null, calAtividadeAte = null;
+function renderCalendarioAtividade(){
+  const inputDe = document.getElementById('calAtividadeDe');
+  const inputAte = document.getElementById('calAtividadeAte');
+  const wrap = document.getElementById('calAtividadeMeses');
+  if(!inputDe || !inputAte || !wrap) return;
+  if(!calAtividadeDe || !calAtividadeAte){
+    const hoje = new Date();
+    const ano = hoje.getFullYear(), mes = hoje.getMonth();
+    calAtividadeDe = `${ano}-${String(mes+1).padStart(2,'0')}-01`;
+    calAtividadeAte = `${ano}-${String(mes+1).padStart(2,'0')}-${String(new Date(ano,mes+1,0).getDate()).padStart(2,'0')}`;
+  }
+  inputDe.value = calAtividadeDe;
+  inputAte.value = calAtividadeAte;
+  if(calAtividadeDe>calAtividadeAte){
+    wrap.innerHTML = `<div class="empty">A data inicial precisa ser antes da final.</div>`;
+    return;
+  }
+  const de = new Date(calAtividadeDe+'T00:00:00'), ate = new Date(calAtividadeAte+'T00:00:00');
+  const mesesSpan = (ate.getFullYear()-de.getFullYear())*12 + (ate.getMonth()-de.getMonth()) + 1;
+  if(mesesSpan>12){
+    wrap.innerHTML = `<div class="empty">Escolha um intervalo de até 12 meses por vez.</div>`;
+    return;
+  }
+  let html = '';
+  const cursor = new Date(de.getFullYear(), de.getMonth(), 1);
+  for(let i=0;i<mesesSpan;i++){
+    html += buildMesCalendarioHtml(cursor.getFullYear(), cursor.getMonth(), calAtividadeDe, calAtividadeAte);
+    cursor.setMonth(cursor.getMonth()+1);
+  }
+  wrap.innerHTML = html;
+}
+document.getElementById('calAtividadeDe').addEventListener('change', (e)=>{
+  if(e.target.value){ calAtividadeDe = e.target.value; renderCalendarioAtividade(); }
+});
+document.getElementById('calAtividadeAte').addEventListener('change', (e)=>{
+  if(e.target.value){ calAtividadeAte = e.target.value; renderCalendarioAtividade(); }
+});
 document.getElementById('goalMinus').addEventListener('click', ()=>{
   state.dailyGoal = Math.max(1, state.dailyGoal-1); save(); renderMetas();
 });
@@ -8478,6 +8818,21 @@ function sessionModoInfo(a){
   if(modo==='cronometro'){
     return { pct:0, fase:'Sem alvo de tempo — conta corrida.', mostraBarra:false };
   }
+  // Modo "Timer" (ago/2026): tempo-alvo escolhido pelo usuario pra ESTA sessao (nao um
+  // intervalo que se repete, como o Pomodoro) - ver stovTimerPicker/setSessionTimerAlvo.
+  // Toca alarme uma unica vez ao bater o alvo (ver checkSessionAlarme/sessionPhaseSerial).
+  if(modo==='timer'){
+    if(!a.duracaoAlvoMin){
+      return { pct:0, fase:'Escolha quanto tempo quer estudar nesta seção, aqui embaixo.', mostraBarra:false, precisaEscolherAlvo:true };
+    }
+    const alvoS = a.duracaoAlvoMin*60;
+    const pct = Math.min(1, elapsedS/alvoS);
+    const restanteS = Math.max(0, alvoS-elapsedS);
+    const fase = restanteS>0
+      ? `Faltam ${fmtDuracao(restanteS)} para completar os ${a.duracaoAlvoMin}min`
+      : `Tempo esgotado! Você passou dos ${a.duracaoAlvoMin}min planejados.`;
+    return { pct, fase, mostraBarra:true };
+  }
   const cfg = pomodoroConfig();
   const focusS = cfg.focusMin*60;
   const breakS = cfg.breakMin*60;
@@ -8487,6 +8842,92 @@ function sessionModoInfo(a){
     return { pct: noCiclo/focusS, fase: `Foco · ${cfg.focusMin}min (intervalo de ${cfg.breakMin}min a seguir)`, mostraBarra:true };
   }
   return { pct: (noCiclo-focusS)/breakS, fase: `Intervalo · ${cfg.breakMin}min`, mostraBarra:true };
+}
+// Numero de serie da "fase" da sessao (ago/2026, alarme sonoro): cada vez que esse numero
+// AUMENTA em relacao ao ultimo valor conferido (a._lastAlarmSerial), significa que uma fase
+// terminou - eh isso que dispara o alarme, nao um timestamp fixo (assim funciona mesmo se a
+// aba ficar em segundo plano e o tick perder alguns segundos). Pomodoro: incrementa a cada
+// troca foco<->intervalo, pra sempre (2 por ciclo completo). Timer: incrementa uma unica vez,
+// quando o tempo-alvo eh atingido. Cronometro livre: nunca incrementa (sem alarme).
+function sessionPhaseSerial(a){
+  const modo = a.modo || 'pomodoro';
+  const elapsedS = activeSessionElapsedMs()/1000;
+  if(modo==='timer'){
+    if(!a.duracaoAlvoMin) return 0;
+    return elapsedS >= a.duracaoAlvoMin*60 ? 1 : 0;
+  }
+  if(modo==='pomodoro'){
+    const cfg = pomodoroConfig();
+    const focusS = cfg.focusMin*60, breakS = cfg.breakMin*60, ciclo = focusS+breakS;
+    if(ciclo<=0) return 0;
+    const ciclosCompletos = Math.floor(elapsedS/ciclo);
+    const noCiclo = elapsedS % ciclo;
+    const faseIdx = noCiclo<focusS ? 0 : 1;
+    return ciclosCompletos*2 + faseIdx;
+  }
+  return 0; // cronometro livre - sem fase, sem alarme
+}
+// Chamado a cada tick do cronometro (ver timerInterval): dispara o alarme quando a "fase"
+// avancou desde a ultima checagem. Guardado em a._lastAlarmSerial (persistido junto da
+// sessao) pra sobreviver a reload de pagina sem repetir nem perder o alarme.
+function checkSessionAlarme(a){
+  const serial = sessionPhaseSerial(a);
+  if(serial > (a._lastAlarmSerial||0)){
+    a._lastAlarmSerial = serial;
+    save();
+    startAlarmLoop();
+  }
+}
+/* ===================== ALARME SONORO DO CRONOMETRO (ago/2026) =====================
+   Pedido do Bruno: alarme sonoro no fim do tempo-alvo (modo Timer) e em toda troca de fase
+   do Pomodoro, repetindo ate ele interagir (nao um beep unico que pode passar despercebido).
+   Web Audio puro (sem arquivo de audio externo) - dois "bips" por toque, tocando em loop a
+   cada 1.4s ate stopAlarmLoop() ser chamado. Qualquer interacao com os controles do
+   cronometro (pausar, retomar, encerrar, trocar de modo) silencia - ver os addEventListener
+   de #timerPauseBtn, #stovPlayBtn, #stovStopBtn, #timerEndBtn e .stov-mode-btn abaixo. */
+let alarmAudioCtx = null;
+let alarmLoopId = null;
+function playAlarmBeep(){
+  try{
+    if(!alarmAudioCtx) alarmAudioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    const ctx = alarmAudioCtx;
+    if(ctx.state==='suspended') ctx.resume();
+    const now = ctx.currentTime;
+    [0, 0.18].forEach((delay,i)=>{
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = i%2===0 ? 880 : 660;
+      gain.gain.setValueAtTime(0.0001, now+delay);
+      gain.gain.exponentialRampToValueAtTime(0.25, now+delay+0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now+delay+0.16);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(now+delay); osc.stop(now+delay+0.18);
+    });
+  }catch(e){ /* Web Audio indisponivel - o banner visual "Alarme tocando" continua aparecendo */ }
+}
+function startAlarmLoop(){
+  const btn = document.getElementById('stovAlarmSilence');
+  if(btn) btn.hidden = false;
+  if(alarmLoopId) return; // ja tocando, nao duplica o interval
+  playAlarmBeep();
+  alarmLoopId = setInterval(playAlarmBeep, 1400);
+  if(navigator.vibrate) navigator.vibrate([200,100,200]);
+}
+function stopAlarmLoop(){
+  if(alarmLoopId){ clearInterval(alarmLoopId); alarmLoopId=null; }
+  const btn = document.getElementById('stovAlarmSilence');
+  if(btn) btn.hidden = true;
+}
+function setSessionTimerAlvo(min){
+  const a = state.activeSession;
+  if(!a || !(min>0)) return;
+  a.duracaoAlvoMin = Math.max(1, Math.min(600, Math.round(min)));
+  a._lastAlarmSerial = 0; // novo alvo -> novo alarme quando bater, mesmo trocando de tempo no meio da sessao
+  if(!state.settings.timer) state.settings.timer = {};
+  state.settings.timer.lastMin = a.duracaoAlvoMin;
+  save();
+  renderTimerBar();
 }
 function renderTimerBar(){
   const bar = document.getElementById('timerBar');
@@ -8528,23 +8969,35 @@ function renderTimerBar(){
     bar2.style.transform = `scaleX(${Math.min(1, Math.max(0, info.pct))})`;
     document.getElementById('stovPhase').textContent = info.fase;
     document.getElementById('sessionTimerOverlay').querySelector('.stov-progress').style.visibility = info.mostraBarra? 'visible':'hidden';
+    // Picker do tempo-alvo do modo Timer (so aparece quando o modo eh 'timer' e ainda nao
+    // tem duracaoAlvoMin definida - ver sessionModoInfo/setSessionTimerAlvo).
+    const precisaAlvo = !!info.precisaEscolherAlvo;
+    document.getElementById('stovTimerPicker').hidden = !precisaAlvo;
+    document.getElementById('stovTimerEdit').hidden = !(a.modo==='timer' && a.duracaoAlvoMin && !precisaAlvo);
+    if(precisaAlvo){
+      const lastMin = state.settings.timer && state.settings.timer.lastMin;
+      const custom = document.getElementById('stovTimerCustomMin');
+      if(lastMin && !custom.value) custom.placeholder = lastMin+'min (último usado)';
+    }
   }
 
   if(!timerInterval){
     timerInterval = setInterval(()=>{
       if(state.activeSession && !state.activeSession.paused){
+        checkSessionAlarme(state.activeSession);
         renderTimerBar();
       }
     }, 1000);
   }
 }
 document.getElementById('timerPauseBtn').addEventListener('click', ()=>{
+  stopAlarmLoop();
   const a = state.activeSession;
   if(!a) return;
   if(a.paused) resumeActiveSession(); else pauseActiveSession();
   renderTimerBar();
 });
-document.getElementById('timerEndBtn').addEventListener('click', ()=> openEndSessionModal());
+document.getElementById('timerEndBtn').addEventListener('click', ()=>{ stopAlarmLoop(); openEndSessionModal(); });
 document.getElementById('timerBarExpand').addEventListener('click', ()=>{
   if(!state.activeSession) return;
   sessionOverlayMinimized = false;
@@ -8555,14 +9008,32 @@ document.getElementById('stovMinimizeBtn').addEventListener('click', ()=>{
   renderTimerBar();
 });
 document.getElementById('stovPlayBtn').addEventListener('click', ()=>{
+  stopAlarmLoop();
   const a = state.activeSession;
   if(!a) return;
   if(a.paused) resumeActiveSession(); else pauseActiveSession();
   renderTimerBar();
 });
-document.getElementById('stovStopBtn').addEventListener('click', ()=> openEndSessionModal());
+document.getElementById('stovStopBtn').addEventListener('click', ()=>{ stopAlarmLoop(); openEndSessionModal(); });
+document.getElementById('stovAlarmSilence').addEventListener('click', stopAlarmLoop);
+document.querySelectorAll('#stovTimerChips button').forEach(btn=>{
+  btn.addEventListener('click', ()=> setSessionTimerAlvo(Number(btn.dataset.min)));
+});
+document.getElementById('stovTimerConfirm').addEventListener('click', ()=>{
+  const v = parseFloat(document.getElementById('stovTimerCustomMin').value);
+  if(v>0) setSessionTimerAlvo(v);
+  else toast('Digite quantos minutos, ou escolha um dos atalhos acima.');
+});
+document.getElementById('stovTimerEdit').addEventListener('click', ()=>{
+  const a = state.activeSession;
+  if(!a) return;
+  a.duracaoAlvoMin = null;
+  save();
+  renderTimerBar();
+});
 document.querySelectorAll('#stovModes .stov-mode-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
+    stopAlarmLoop();
     const a = state.activeSession;
     if(!a) return;
     a.modo = btn.dataset.modo;
@@ -8807,7 +9278,7 @@ function renderTempo(){
   const c = consistencia(30);
   document.getElementById('tempoConsistencia').innerHTML = `
     <div class="consist-grid">
-      <div class="stat-box"><b>${c.diasComSessao}/${c.diasPeriodo}</b><span>Dias estudados (30d)</span></div>
+      <div class="stat-box"><b>${c.diasComSessao}/${c.diasPeriodo}</b><span>Dias estudados (${c.diasPeriodo}d)</span></div>
       <div class="stat-box"><b>${fmtDuracao(c.tempoMedioDiarioSegundos)}</b><span>Média por dia</span></div>
     </div>`;
   document.getElementById('tipConsistencia').innerHTML = tipIcon('consistencia');
@@ -8897,6 +9368,24 @@ function buildCicloDonutHtml(centerText){
     acc += peso;
     const end = (acc/total*100);
     stops.push(`${subjectColor(si)} ${start}% ${end}%`);
+  });
+  return `<div class="ciclo-donut" style="background:conic-gradient(${stops.join(',')});"><div class="ciclo-donut-txt">${centerText}</div></div>`;
+}
+// Rosca "Restante" (ago/2026): mesma logica da rosca de total, so que fatiada pelo tempo que
+// FALTA de cada materia (meta - estudado, nunca negativo) em vez do peso/meta cheia - mostra
+// visualmente o que ja foi "consumido" do plano da semana. Materia que ja bateu a meta some
+// da rosca (falta=0), igual uma matéria com peso zero some da rosca de total.
+function buildCicloDonutRestanteHtml(centerText){
+  const linhas = SUBJECTS.map((s,si)=>({ si, falta: Math.max(0, cicloMetaSegundos(si)-cicloEstudadoSegundos(si)) }))
+    .filter(x=> getCicloPeso(x.si)>0 && x.falta>0);
+  if(linhas.length===0) return `<div class="empty">Nenhuma matéria com tempo restante — ciclo em dia.</div>`;
+  const totalFalta = linhas.reduce((s,x)=>s+x.falta,0);
+  let acc = 0;
+  const stops = linhas.map(x=>{
+    const start = acc/totalFalta*100;
+    acc += x.falta;
+    const end = acc/totalFalta*100;
+    return `${subjectColor(x.si)} ${start}% ${end}%`;
   });
   return `<div class="ciclo-donut" style="background:conic-gradient(${stops.join(',')});"><div class="ciclo-donut-txt">${centerText}</div></div>`;
 }
@@ -9025,6 +9514,7 @@ function renderPlanejamento(){
   document.getElementById('cicloStatProgressoBar').style.width = pctTotal+'%';
 
   document.getElementById('cicloDonutWrap').innerHTML = buildCicloDonutHtml(fmtHorasMin(metaTotal));
+  document.getElementById('cicloDonutRestanteWrap').innerHTML = buildCicloDonutRestanteHtml(fmtHorasMin(Math.max(0, metaTotal-estudadoTotal)));
   document.getElementById('cicloLegend').innerHTML = c.ordem.filter(si=>getCicloPeso(si)>0).map(si=>`<i style="background:${subjectColor(si)}" title="${SUBJECTS[si].name}"></i>`).join('');
 
   renderCicloSequencia();
@@ -9032,6 +9522,15 @@ function renderPlanejamento(){
   renderCicloHistorico();
   renderCalendario();
 }
+document.getElementById('btnAtualizarCicloSemana').addEventListener('click', atualizarCicloSemanaManual);
+// Rede de seguranca (ago/2026) pro mesmo motivo do checkCalendarioRollover: um PWA "retomado"
+// depois de ficar em segundo plano (celular bloqueado, aba trocada) pode nunca rodar um render
+// completo de novo sozinho - sem isso, o aviso "semana desatualizada"/o botao "Atualizar ciclo"
+// so apareceriam depois de um reload manual. Reavalia (sem mudar nada sozinho, so redesenha)
+// toda vez que a aba volta a ficar visivel.
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='visible' && state.ciclo) renderPlanejamento();
+});
 document.getElementById('btnCriarCiclo').addEventListener('click', ()=>{
   const horas = parseFloat(document.getElementById('cicloSetupHoras').value)||20;
   criarCiclo(horas);
@@ -9145,8 +9644,13 @@ function renderCalendario(){
   document.getElementById('tipCalendarioSemana').innerHTML = tipIcon('calendario_semana');
   wireTooltips(document.getElementById('view-planejamento'));
   checkCalendarioRollover();
+  sincronizarBlocosSemana(); // recalcula credito/conclusao antes de desenhar - ver comentario da funcao
   const c = ensureCalendarioDefaults();
-  document.getElementById('calSemanaLabel').textContent = c.semanaRef ? formatarIntervaloSemana(c.semanaRef) : '';
+  const desatualizado = calendarioDesatualizado();
+  document.getElementById('btnAtualizarCicloSemana').hidden = !desatualizado;
+  document.getElementById('calSemanaLabel').textContent = c.semanaRef
+    ? formatarIntervaloSemana(c.semanaRef) + (desatualizado ? ' — semana passada, desatualizada. Aperte "Atualizar ciclo" abaixo.' : '')
+    : '';
   const hojeSeg = segundaFeiraDe(todayStr());
   const hojeIdxSemana = Math.round((new Date(todayStr()+'T00:00:00') - new Date(hojeSeg+'T00:00:00'))/86400000); // 0=seg..6=dom
 
@@ -9176,9 +9680,17 @@ function renderCalendario(){
           const juntaAntes = idx>0 && blocos[idx-1].si===b.si;
           const juntaDepois = idx<blocos.length-1 && blocos[idx+1].si===b.si;
           const joinCls = (juntaAntes?' join-top':'')+(juntaDepois?' join-bottom':'');
+          // ago/2026: "faltam Xmin" agora reflete o credito cumulativo da semana (ver
+          // blocoFaltaSegundos/sincronizarBlocosSemana) - ex.: se voce ja estudou 10min dessa
+          // materia pela aba Materia, um bloco de 30min mostra "faltam 20min", e OUTRO bloco de
+          // 30min da mesma materia, na mesma semana, continua mostrando "faltam 30min" (o
+          // credito parcial vale so pro proximo bloco pendente na fila, um de cada vez).
+          const faltaSeg = blocoFaltaSegundos(d, idx, b);
           const titulo = b.done
             ? `${SUBJECTS[b.si].name} — concluído (${dur}min)`
-            : `${SUBJECTS[b.si].name} — faltam ${dur}min nesta sessão (só fecha se o cronômetro bater os ${dur}min de uma vez)`;
+            : faltaSeg<dur*60
+              ? `${SUBJECTS[b.si].name} — faltam ${fmtDuracao(faltaSeg)} pra completar esta sessão de ${dur}min (parte já foi estudada essa semana)`
+              : `${SUBJECTS[b.si].name} — faltam ${dur}min nesta sessão`;
           return `<div class="cal-block${joinCls}${b.done?' done':''}${ativa?'':' inativa'}" data-dia="${d}" data-idx="${idx}" data-si="${b.si}" style="--mat-cor:${subjectColor(b.si)}" title="${escapeHtml(titulo)}">
             <span class="cal-block-nm">${escapeHtml(SUBJECTS[b.si].name)}</span>
             ${dur!==30?`<span class="cal-block-dur">${dur}min</span>`:''}
