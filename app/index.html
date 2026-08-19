@@ -3136,18 +3136,21 @@ function save(){
     syncSchedulePush();
   }
 }
-// ago/2026 (bug reportado pelo Bruno): usava toISOString() (data em UTC). No fuso de Brasilia
-// (UTC-3), isso faz o app achar que ja "virou o dia" a partir de ~21h no horario local (o
-// horario em que UTC cruza a meia-noite) - afetava direto a Meta diaria (paginas de hoje
-// "sumiam" pra uma chave de amanha), a sequencia de dias consecutivos, o agendamento de revisao
-// espacada e a deteccao de virada de semana do Ciclo. Troca pra data LOCAL (mesma fonte que
-// toLocaleDateString('pt-BR') ja usa em outros lugares do app, como o Historico de sessoes) -
-// ver migrateState pra a limpeza unica do rastro que o bug antigo deixou em pageActivity/activity.
-function todayStr(){
-  const d = new Date();
+// ago/2026 (bug reportado pelo Bruno, duas rodadas): a REGRA é "o que foi estudado de meia-noite
+// até 23:59:59 do dia X fica no dia X, local - o minuto que passa da meia-noite já é dia X+1".
+// Isso só funciona se TODO calculo de "qual dia é esse timestamp" usar o relogio LOCAL do
+// usuario (Brasilia, UTC-3) do inicio ao fim - nunca UTC. dataLocalDe() é a UNICA função do app
+// que converte um instante (epoch ms) pra string de data - todo o resto (todayStr, addDays,
+// segundaFeiraDe, e qualquer lugar que precise saber "em que dia caiu esse timestamp", como
+// sessao.timestampFim ou ciclo.cicloStartedAt) chama ela, pra nunca mais divergir. NUNCA usar
+// `new Date(x).toISOString().slice(0,10)` em nenhum lugar novo do app - isso converte pra UTC e
+// empurra qualquer horario entre ~21h e meia-noite (Brasilia) pro dia seguinte por engano.
+function dataLocalDe(ms){
+  const d = new Date(ms);
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-function addDays(str,n){ const d=new Date(str+"T00:00:00"); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
+function todayStr(){ return dataLocalDe(Date.now()); }
+function addDays(str,n){ const d=new Date(str+"T00:00:00"); d.setDate(d.getDate()+n); return dataLocalDe(d.getTime()); }
 function key(si,ai){ return si+"|"+ai; }
 function getAula(si,ai){
   const k = key(si,ai);
@@ -3516,7 +3519,7 @@ function sessionsNoPeriodo(periodo){
   else if(periodo==='mes') inicio = addDays(today, -29);
   else return state.sessions;
   return state.sessions.filter(s=>{
-    const d = new Date(s.timestampFim).toISOString().slice(0,10);
+    const d = dataLocalDe(s.timestampFim);
     return d>=inicio && d<=today;
   });
 }
@@ -3559,7 +3562,7 @@ function consistencia(diasPeriodo){
   let diasComSessao=0, tempoTotal=0;
   for(let i=0;i<diasPeriodo;i++){
     const d = addDays(today,-i);
-    const sessoesNoDia = state.sessions.filter(s=> new Date(s.timestampFim).toISOString().slice(0,10)===d);
+    const sessoesNoDia = state.sessions.filter(s=> dataLocalDe(s.timestampFim)===d);
     if(sessoesNoDia.length){ diasComSessao++; tempoTotal += sumTempo(sessoesNoDia); }
   }
   return {
@@ -3574,7 +3577,7 @@ function sessionsInWindow(tipo, days, offsetDays){
   return state.sessions.filter(s=>{
     if(s.tipo!==tipo) return false;
     if(!isSubjectActive(s.materiaIdx)) return false;
-    const d = new Date(s.timestampFim).toISOString().slice(0,10);
+    const d = dataLocalDe(s.timestampFim);
     return d>=start && d<=end;
   });
 }
@@ -4019,7 +4022,7 @@ function segundaFeiraDe(dataStr){
   const dow = d.getDay(); // 0=domingo..6=sabado
   const diff = dow===0 ? -6 : 1-dow;
   d.setDate(d.getDate()+diff);
-  return d.toISOString().slice(0,10);
+  return dataLocalDe(d.getTime());
 }
 // Sobe esse numero sempre que a logica de geracao da semana (decomporMateriaEmItens,
 // distribuirComTeto, etc) mudar de um jeito que invalida semanas ja geradas - forca uma
@@ -5547,7 +5550,7 @@ function buildEstudoSemanalHtml(modo, numDias){
   for(let i=numDias-1;i>=0;i--) dias.push(addDays(todayStr(), -i));
   const diaNomes = ['dom','seg','ter','qua','qui','sex','sáb'];
   const valores = dias.map(d=>{
-    const sessoesDoDia = state.sessions.filter(s=> new Date(s.timestampFim).toISOString().slice(0,10)===d && isSubjectActive(s.materiaIdx));
+    const sessoesDoDia = state.sessions.filter(s=> dataLocalDe(s.timestampFim)===d && isSubjectActive(s.materiaIdx));
     if(modo==='questoes') return sessoesDoDia.reduce((sum,s)=> sum + (s.tipo==='questoes'? questoesRespondidasNaSessao(s) : 0), 0);
     return sumTempo(sessoesDoDia);
   });
@@ -7338,7 +7341,7 @@ function registrarRevisaoAvulsa(si, ai, qualidade){
 function dataInicioPlanejamentoISO(){
   const c = state.ciclo;
   if(!c || !c.cicloStartedAt) return null;
-  return new Date(c.cicloStartedAt).toISOString().slice(0,10);
+  return dataLocalDe(c.cicloStartedAt);
 }
 // Quantos dias corridos se passaram desde o início do planejamento, contando o próprio dia
 // de início como dia 1 (nunca 0, pra não gerar divisão por zero em quem criou o ciclo hoje).
