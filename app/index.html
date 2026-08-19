@@ -7512,7 +7512,7 @@ function buildMesCalendarioHtml(ano, mes, deStr, ateStr){ // mes: 0-11
     let titulo = fmtDate(iso);
     if(estudou){
       const st = estatisticasDoDia(iso);
-      titulo += ` — ${fmtHorasMin(st.segundos)} estudados · ${st.questoes} questão${st.questoes===1?'':'ões'} · ${st.paginas} página${st.paginas===1?'':'s'} lida${st.paginas===1?'':'s'}`;
+      titulo += ` — ${fmtHorasMin(st.segundos)} estudados · ${st.questoes} ${st.questoes===1?'questão':'questões'} · ${st.paginas} página${st.paginas===1?'':'s'} lida${st.paginas===1?'':'s'}`;
     }
     celulas += `<div class="${cls}" title="${escapeHtml(titulo)}">${dia}</div>`;
   }
