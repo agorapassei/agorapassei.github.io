@@ -1025,14 +1025,16 @@
   .cal-mes-titulo{font-size:.8rem; font-weight:800; margin-bottom:6px;}
   .cal-mes-semana-hd{display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin-bottom:4px;}
   .cal-mes-semana-hd span{font-size:.62rem; color:var(--text-mut); text-align:center; font-weight:700;}
-  /* ago/2026 (pedido do Bruno): "Calendário de estudos" (Metas) ocupava a largura inteira do
-     card com quadrados grandes demais - encolhe o card inteiro (título, filtro De/Até e a
-     grade) numa tela com espaço de sobra, pra caber em ~1/4 da área atual (metade da largura,
-     metade da altura por causa do aspect-ratio:1 dos quadrados). Em telas estreitas (celular)
-     mantém o tamanho normal - não há espaço sobrando pra economizar lá. */
-  @media (min-width:700px){
-    .card-cal-compacto{ max-width:50%; }
-  }
+  /* ago/2026 (pedido do Bruno): "Meta por data alvo" e "Calendário de estudos" (Metas) lado a
+     lado, cada card com metade da tela, em vez de empilhados ocupando a largura inteira - isso
+     também encolhe os quadrados do calendário (menor container = quadrados aspect-ratio:1
+     menores). Em telas estreitas (celular) empilha normal, sem espaço sobrando pra dividir. */
+  .cal-metas-row{display:flex; gap:16px; flex-wrap:wrap;}
+  .cal-metas-row .card{flex:1 1 320px; min-width:0;}
+  /* De/Até do Calendário de estudos: largura de conteúdo (não esticados por flex:1), juntos à
+     esquerda com um respiro pequeno entre os dois - antes ficavam nas pontas opostas da linha. */
+  .cal-atividade-datas{display:flex; gap:14px; margin-bottom:12px;}
+  .cal-atividade-datas input{width:auto;}
   .streak-box{display:flex; align-items:center; gap:14px; background:var(--yellow); border-radius:14px; padding:14px 16px; margin-bottom:16px;}
   .streak-box .flame{font-size:1.9rem;}
   .streak-box b{font-size:1.4rem; font-weight:800; color:#6b5200;}
@@ -2056,29 +2058,35 @@
       <div class="bar" style="margin-top:8px;"><i id="todayBar" style="width:0%"></i></div>
     </div>
 
-    <div class="card">
-      <h2>Meta por data alvo <span id="tipMetaDataAlvo"></span></h2>
-      <div class="settings-sub" style="margin-top:-6px;">Escolha até quando quer terminar de ler toda a teoria restante. O app calcula o ritmo necessário — em páginas/dia e em questões/dia — pra chegar lá no prazo, com base no seu ritmo atual.</div>
-      <!-- "Data de início" (ago/2026, pedido do Bruno): mostra a partir de quando o ritmo
-           atual (páginas/dia, questões/dia) está sendo medido - ver dataInicioPlanejamentoISO. -->
-      <div id="metaDataInicioLbl" style="font-size:.76rem; color:var(--text-mut); margin-bottom:10px;"></div>
-      <div class="form-row" style="margin-bottom:10px;">
-        <label>Terminar até</label>
-        <input type="date" id="metaDataAlvo">
+    <!-- ago/2026 (pedido do Bruno): "Meta por data alvo" e "Calendário de estudos" lado a lado,
+         cada um com metade da largura, em vez de empilhados ocupando a tela inteira - ver
+         .cal-metas-row. Em telas estreitas (celular) volta a empilhar (sem espaço pra dividir). -->
+    <div class="cal-metas-row">
+      <div class="card">
+        <h2>Meta por data alvo <span id="tipMetaDataAlvo"></span></h2>
+        <div class="settings-sub" style="margin-top:-6px;">Escolha até quando quer terminar de ler toda a teoria restante. O app calcula o ritmo necessário — em páginas/dia e em questões/dia — pra chegar lá no prazo, com base no seu ritmo atual.</div>
+        <!-- "Data de início" (ago/2026, pedido do Bruno): mostra a partir de quando o ritmo
+             atual (páginas/dia, questões/dia) está sendo medido - ver dataInicioPlanejamentoISO. -->
+        <div id="metaDataInicioLbl" style="font-size:.76rem; color:var(--text-mut); margin-bottom:10px;"></div>
+        <div class="form-row" style="margin-bottom:10px;">
+          <label>Terminar até</label>
+          <input type="date" id="metaDataAlvo">
+        </div>
+        <div id="metaDataAlvoResult"></div>
       </div>
-      <div id="metaDataAlvoResult"></div>
-    </div>
 
-    <div class="card card-cal-compacto">
-      <h2>Calendário de estudos</h2>
-      <!-- ago/2026 (pedido do Bruno): trocou de um grid fixo de 14 dias pra um calendario
-           mensal de verdade, com selecao de intervalo (De/Ate) - ver renderCalendarioAtividade/
-           buildMesCalendarioHtml. Sem selecao, mostra o mes corrente inteiro. -->
-      <div class="form-row" style="display:flex; gap:8px; margin-bottom:12px;">
-        <div style="flex:1;"><label style="font-size:.7rem; color:var(--text-mut);">De</label><input type="date" id="calAtividadeDe"></div>
-        <div style="flex:1;"><label style="font-size:.7rem; color:var(--text-mut);">Até</label><input type="date" id="calAtividadeAte"></div>
+      <div class="card">
+        <h2>Calendário de estudos</h2>
+        <!-- ago/2026 (pedido do Bruno): trocou de um grid fixo de 14 dias pra um calendario
+             mensal de verdade, com selecao de intervalo (De/Ate) - ver renderCalendarioAtividade/
+             buildMesCalendarioHtml. Sem selecao, mostra o mes corrente inteiro. De/Ate ficam
+             juntos (largura de conteudo, nao esticados) em vez de nas pontas opostas da linha. -->
+        <div class="form-row cal-atividade-datas">
+          <div><label style="font-size:.7rem; color:var(--text-mut);">De</label><input type="date" id="calAtividadeDe"></div>
+          <div><label style="font-size:.7rem; color:var(--text-mut);">Até</label><input type="date" id="calAtividadeAte"></div>
+        </div>
+        <div id="calAtividadeMeses"></div>
       </div>
-      <div id="calAtividadeMeses"></div>
     </div>
   </section>
 
@@ -3001,6 +3009,30 @@ function migrateState(s){
     if(r.dominated===undefined) r.dominated = (r.lastResult==='correct');
   });
   if(!s.pageActivity) s.pageActivity = {};
+  if(!s.activity) s.activity = {};
+  // ago/2026 (bug reportado pelo Bruno): todayStr() usava toISOString() (UTC), nao a data
+  // LOCAL do usuario. No fuso de Brasilia (UTC-3), qualquer uso do app entre ~21h e meia-noite
+  // local ja "virava o dia" em UTC - entao paginas lidas depois desse horario eram somadas na
+  // chave de AMANHA em vez de hoje, e a Meta diaria ("Hoje: X/Y paginas") passava a mostrar so
+  // uma fatia do dia real (o resto ficava "escondido" numa chave de data que ainda nao chegou).
+  // todayStr() ja foi corrigido pra usar data local (ver definicao da funcao). Esta migracao roda
+  // uma vez por carregamento e conserta o rastro que o bug antigo pode ter deixado: qualquer
+  // chave de pageActivity/activity com data ESTRITAMENTE DEPOIS de hoje (data local correta) so
+  // pode ter nascido desse bug - ninguem "le pagina no futuro" - entao e mesclada de volta pro
+  // dia de hoje e a chave fantasma e removida. Nao mexe em datas passadas (nao da pra distinguir
+  // com seguranca, sem replay sessao-a-sessao, uma chave passada afetada de uma legitima).
+  (function corrigirChavesFuturasDoFusoHorario(){
+    const hoje = todayStr();
+    [s.pageActivity, s.activity].forEach(mapa=>{
+      Object.keys(mapa).forEach(k=>{
+        if(k>hoje){
+          if(mapa===s.pageActivity) mapa[hoje] = (mapa[hoje]||0) + mapa[k];
+          else if(mapa[k]) mapa[hoje] = true;
+          delete mapa[k];
+        }
+      });
+    });
+  })();
   if(!s.subjectStages) s.subjectStages = {};
   if(!s.dailyGoal || s.dailyGoal<1) s.dailyGoal = 15; // metas antigas eram em "aulas/dia" (1-20); reinicia em paginas/dia
   if(!s.sessions) s.sessions = [];
@@ -3104,7 +3136,17 @@ function save(){
     syncSchedulePush();
   }
 }
-function todayStr(){ return new Date().toISOString().slice(0,10); }
+// ago/2026 (bug reportado pelo Bruno): usava toISOString() (data em UTC). No fuso de Brasilia
+// (UTC-3), isso faz o app achar que ja "virou o dia" a partir de ~21h no horario local (o
+// horario em que UTC cruza a meia-noite) - afetava direto a Meta diaria (paginas de hoje
+// "sumiam" pra uma chave de amanha), a sequencia de dias consecutivos, o agendamento de revisao
+// espacada e a deteccao de virada de semana do Ciclo. Troca pra data LOCAL (mesma fonte que
+// toLocaleDateString('pt-BR') ja usa em outros lugares do app, como o Historico de sessoes) -
+// ver migrateState pra a limpeza unica do rastro que o bug antigo deixou em pageActivity/activity.
+function todayStr(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 function addDays(str,n){ const d=new Date(str+"T00:00:00"); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
 function key(si,ai){ return si+"|"+ai; }
 function getAula(si,ai){
