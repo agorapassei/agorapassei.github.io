@@ -3338,6 +3338,33 @@ const Metricas = {
     const qtd = (state.answerLog||[]).filter(a=> a.d>=corte).length;
     return qtd/divisor;
   },
+  // ---- DOMINIO DE QUESTOES (19/08/2026, decisao do Bruno) ----
+  // Unica funcao que calcula "quantas questoes distintas voce ja tentou" e "quantas ja domina"
+  // (acertou alguma vez) - substitui computeMastery()/subjectMastery(si), que faziam a MESMA
+  // conta de dois jeitos diferentes (uma via qidSubjectMap+isSubjectActive sobre state.questions,
+  // outra lendo QUESTION_BANK[si] direto) - risco de divergencia futura, mesmo sem bug hoje.
+  // Sem scope.si: soma so materias ATIVAS (mesmo criterio de sempre pros agregados gerais).
+  // Com scope.si: soma so aquela materia, SEM filtrar por ativa - se voce esta pedindo o
+  // dominio de uma materia especifica, quer ver o numero dela mesmo que esteja desativada.
+  dominioQuestoes(scope){
+    const si = scope && scope.si!=null ? scope.si : null;
+    let seen=0, dominated=0;
+    if(si!=null){
+      const aulas = (window.QUESTION_BANK && QUESTION_BANK[si]) || [];
+      aulas.forEach(qs=> qs.forEach(q=>{
+        const r = state.questions[q.id];
+        if(r && r.attempts){ seen++; if(r.dominated) dominated++; }
+      }));
+    } else {
+      const qsi = qidSubjectMap();
+      Object.entries(state.questions||{}).forEach(([qid,r])=>{
+        const s = qsi[qid];
+        if(s!=null && !isSubjectActive(s)) return;
+        if(r && r.attempts){ seen++; if(r.dominated) dominated++; }
+      });
+    }
+    return { seen, dominated, pct: seen? Math.round(dominated/seen*100) : null };
+  },
 };
 
 /* ===================== SESSÕES DE ESTUDO / CRONÔMETRO ===================== */
@@ -3494,24 +3521,26 @@ function sumTempo(sessions){ return sessions.reduce((s,x)=>s+x.tempoLiquidoSegun
 function tempoTotalTeoria(sessions){ return sumTempo((sessions||state.sessions).filter(s=>s.tipo==='teoria' && isSubjectActive(s.materiaIdx))); }
 function tempoTotalTeoriaMateria(si, sessions){ return sumTempo((sessions||state.sessions).filter(s=>s.tipo==='teoria' && s.materiaIdx===si)); }
 function tempoTotalTeoriaApostila(si,ai, sessions){ return sumTempo((sessions||state.sessions).filter(s=>s.tipo==='teoria' && s.materiaIdx===si && s.apostilaIdx===ai)); }
-function paginasLidasViaSessoes(si,ai){
-  return state.sessions.filter(s=>s.tipo==='teoria' && s.materiaIdx===si && s.apostilaIdx===ai && s.paginas)
-    .reduce((sum,s)=> sum + Math.max(0, s.paginas[1]-s.paginas[0]), 0);
-}
+// 19/08/2026 (decisao do Bruno, "repositorio unico de metricas"): ritmo de leitura usava um
+// numero de "paginas lidas" DIFERENTE do progresso (somava os intervalos [inicio,fim] de cada
+// sessao de teoria, via a extinta paginasLidasViaSessoes() - podia divergir do progresso real:
+// nao contava paginas corrigidas via o campo manual sem cronometro, e podia contar de mais se o
+// usuario reabrisse uma sessao com inicio sobreposto a uma sessao anterior). Agora usa a MESMA
+// fonte que qualquer outra tela de progresso (pagesReadFor/pagesReadForSubject/pagesReadAll) -
+// so pode existir UM numero de "paginas lidas" no app inteiro, venha de onde vier.
 function ritmoLeitura(si,ai){ // segundos por pagina, ou null se ainda sem dado
   const tempo = tempoTotalTeoriaApostila(si,ai);
-  const paginas = paginasLidasViaSessoes(si,ai);
+  const paginas = pagesReadFor(si,ai);
   return paginas>0 ? tempo/paginas : null;
 }
 function ritmoLeituraMateria(si){
-  let tempo=0, paginas=0;
-  SUBJECTS[si].aulas.forEach((a,ai)=>{ tempo+=tempoTotalTeoriaApostila(si,ai); paginas+=paginasLidasViaSessoes(si,ai); });
+  const tempo = tempoTotalTeoriaMateria(si);
+  const paginas = pagesReadForSubject(si);
   return paginas>0? tempo/paginas : null;
 }
 function ritmoLeituraGlobal(){
   const tempo = tempoTotalTeoria();
-  let paginas=0;
-  SUBJECTS.forEach((s,si)=>{ if(!isSubjectActive(si)) return; s.aulas.forEach((a,ai)=>{ paginas+=paginasLidasViaSessoes(si,ai); }); });
+  const paginas = pagesReadAll(); // ja filtra so materias ativas, mesmo criterio de sempre
   return paginas>0? tempo/paginas : null;
 }
 // ritmo "efetivo": usa o historico da propria apostila; se nao houver, cai pro nivel
@@ -5301,15 +5330,10 @@ function subjectAccuracy(si){
    ago/2026 — esse usa dominadas / TOTAL DO BANCO (ver computeWidgetValue, case 'taxa_dominio',
    e totalQuestoesForSubject/totalQuestoesAll), pro mesmo motivo do computeDominioEdital()
    logo abaixo: dominadas/tentadas dá 100% com poucas questões tentadas, o que engana. */
+// 19/08/2026: delega pro repositorio unico de metricas (Metricas.dominioQuestoes) em vez de
+// calcular aqui - mesma logica de sempre, so centralizada (ver comentario do Metricas).
 function computeMastery(){
-  let seen=0, dominated=0;
-  const qsi = qidSubjectMap();
-  Object.entries(state.questions||{}).forEach(([qid,r])=>{
-    const si = qsi[qid];
-    if(si!=null && !isSubjectActive(si)) return;
-    if(r && r.attempts){ seen++; if(r.dominated) dominated++; }
-  });
-  return { seen, dominated, pct: seen? Math.round(dominated/seen*100) : null };
+  return Metricas.dominioQuestoes();
 }
 // "Domínio do edital" (placar principal do Painel, ver renderHibrido) - ago/2026.
 // computeMastery() acima mede taxa de ACERTO entre as questões já tentadas (dominadas/tentadas)
@@ -5353,13 +5377,7 @@ function totalQuestoesForSubject(si){
   return SUBJECTS[si].aulas.reduce((sum,a,ai)=> sum + bankFor(si,ai).length, 0);
 }
 function subjectMastery(si){
-  let seen=0, dominated=0;
-  const aulas = QUESTION_BANK && QUESTION_BANK[si] || [];
-  aulas.forEach(qs=> qs.forEach(q=>{
-    const r = state.questions[q.id];
-    if(r && r.attempts){ seen++; if(r.dominated) dominated++; }
-  }));
-  return { seen, dominated, pct: seen? Math.round(dominated/seen*100) : null };
+  return Metricas.dominioQuestoes({si});
 }
 function pendenteQuestionsForAula(si,ai){
   return bankFor(si,ai).filter(q=>{
