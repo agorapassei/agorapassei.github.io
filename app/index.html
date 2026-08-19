@@ -3390,6 +3390,30 @@ const Metricas = {
     }
     return total;
   },
+  // ---- ACERTOS DE QUESTOES (19/08/2026, decisao do Bruno) ----
+  // Mesmo padrao de escopo do tentativasQuestoes, mas soma state.questions[qid].correctCount
+  // em vez de .attempts - "quantas dessas tentativas foram resposta certa". Existia calculada
+  // separadamente em subjectAccuracy(si) e computeTotals() (Painel) - unificado aqui pra ficar
+  // uma fonte so, junto com tentativasQuestoes.
+  acertosQuestoes(scope){
+    const si = scope && scope.si!=null ? scope.si : null;
+    let total = 0;
+    if(si!=null){
+      const aulas = (window.QUESTION_BANK && QUESTION_BANK[si]) || [];
+      aulas.forEach(qs=> qs.forEach(q=>{
+        const r = state.questions[q.id];
+        if(r) total += (r.correctCount||0);
+      }));
+    } else {
+      const qsi = qidSubjectMap();
+      Object.entries(state.questions||{}).forEach(([qid,r])=>{
+        const s = qsi[qid];
+        if(s!=null && !isSubjectActive(s)) return;
+        total += (r.correctCount||0);
+      });
+    }
+    return total;
+  },
   // ---- MATERIAS ATIVAS (19/08/2026, decisao do Bruno) ----
   // Unica fonte de "quais materias estao ativas no ciclo" - antes, ~15 lugares no codigo
   // filtravam SUBJECTS com isSubjectActive inline, cada um por conta propria. isSubjectActive()
@@ -5358,22 +5382,15 @@ function computeTotals(){
       if(rec && rec.studied) studied++;
     });
   });
-  let attempts=0, correct=0;
-  const qsi = qidSubjectMap();
-  Object.entries(state.questions||{}).forEach(([qid,r])=>{
-    const si = qsi[qid];
-    if(si!=null && !isSubjectActive(si)) return;
-    attempts+=r.attempts||0; correct+=r.correctCount||0;
-  });
+  // attempts/correct (Painel geral): antes recalculado aqui na mao, agora vem da mesma
+  // fonte central que subjectAccuracy() e Metricas.tentativasQuestoes() usam (19/08/2026).
+  const attempts = Metricas.tentativasQuestoes();
+  const correct = Metricas.acertosQuestoes();
   return {total,studied,attempts,correct};
 }
 function subjectAccuracy(si){
-  let attempts=0, correct=0;
-  const aulas = QUESTION_BANK && QUESTION_BANK[si] || [];
-  aulas.forEach(qs=> qs.forEach(q=>{
-    const r = state.questions[q.id];
-    if(r && r.attempts){ attempts+=r.attempts; correct+=r.correctCount; }
-  }));
+  const attempts = Metricas.tentativasQuestoes({si});
+  const correct = Metricas.acertosQuestoes({si});
   return { attempts, correct, pct: attempts? Math.round(correct/attempts*100) : null };
 }
 
