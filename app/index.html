@@ -3317,10 +3317,12 @@ const Metricas = {
     return n;
   },
   // ---- ESTATISTICAS AGREGADAS DE UM DIA (tooltip do calendario mensal) ----
+  // 19/08/2026: "questoes" aqui reusa this.questoesNoDia(iso) (fonte via answerLog) - antes
+  // recalculava via questoesIds.length das sessoes do dia, o que podia divergir do numero
+  // "oficial" de questoesNoDia pro MESMO dia (inconsistencia dentro do proprio objeto Metricas).
   estatisticasDoDia(iso){
     const sessoesDoDia = this.sessoesNoDia(iso);
-    const questoes = sessoesDoDia.reduce((sum,s)=> sum + (s.tipo==='questoes'? questoesRespondidasNaSessao(s) : 0), 0);
-    return { segundos: sumTempo(sessoesDoDia), questoes, paginas: this.paginasNoDia(iso) };
+    return { segundos: sumTempo(sessoesDoDia), questoes: this.questoesNoDia(iso), paginas: this.paginasNoDia(iso) };
   },
   // ---- RITMO (usa a mesma janela "menor entre janela pedida e dias reais desde o inicio
   //      do planejamento" que ja existia - ver diasDesdeInicioPlanejamento) ----
@@ -5762,16 +5764,17 @@ function buildDistribuicaoGraficoHtml(){
 // Grafico de barras com o total estudado em cada um dos ultimos N dias (N escolhido no seletor
 // inline do widget: 7/14/30/60) — em tempo (teoria + questoes) ou em quantidade de questoes
 // respondidas, conforme o modo escolhido no widget.
+// 19/08/2026 (decisao do Bruno): usa Metricas.tempoNoDia/questoesNoDia - mesma fonte que
+// Consistencia/streak/heatmap, sem filtro de materia ativa e sem reimplementar a soma local.
+// Antes filtrava por isSubjectActive (sessao de materia desativada nao aparecia aqui, mas
+// aparecia no streak/heatmap da mesma aba) e contava questoes por questoesIds.length da sessao
+// em vez do answerLog (podia divergir em sessao de quiz interrompida ou que atravessa meia-noite).
 function buildEstudoSemanalHtml(modo, numDias){
   numDias = Math.max(1, parseInt(numDias,10)||7);
   const dias = [];
   for(let i=numDias-1;i>=0;i--) dias.push(addDays(todayStr(), -i));
   const diaNomes = ['dom','seg','ter','qua','qui','sex','sáb'];
-  const valores = dias.map(d=>{
-    const sessoesDoDia = state.sessions.filter(s=> dataLocalDe(s.timestampFim)===d && isSubjectActive(s.materiaIdx));
-    if(modo==='questoes') return sessoesDoDia.reduce((sum,s)=> sum + (s.tipo==='questoes'? questoesRespondidasNaSessao(s) : 0), 0);
-    return sumTempo(sessoesDoDia);
-  });
+  const valores = dias.map(d=> modo==='questoes' ? Metricas.questoesNoDia(d) : Metricas.tempoNoDia(d));
   const max = Math.max(1, ...valores);
   // com poucos dias mostra o nome do dia da semana; com mais de 14, mostra o numero do dia
   // (repetir "seg", "ter"... varias vezes ao longo do periodo ficaria ambiguo).
