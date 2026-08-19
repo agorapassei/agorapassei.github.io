@@ -478,7 +478,8 @@
     transition:transform .12s ease, background .15s ease, border-color .15s ease, box-shadow .15s ease;
   }
   .chk.on{background:var(--green); border-color:var(--green); box-shadow:0 0 0 4px color-mix(in srgb, var(--green) 18%, transparent);}
-  .chk:active{transform:scale(.88);}
+  /* so-leitura (ver comentario perto do render do .chk, na Aula 00 corrigida ago/2026) -
+     sem :active de "pressionado", pra nao sugerir que ainda da pra clicar nele. */
   .aula-txt{flex:1;}
   .aula-txt .nm{font-size:.9rem; font-weight:650; display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
   .aula-txt .dt{font-size:.72rem; color:var(--text-mut); margin-top:2px;}
@@ -822,6 +823,18 @@
     .rev-repo-item .rev-acts{width:100%; margin-top:8px;}
   }
   .rev-when{display:block; margin-top:2px; font-weight:700;}
+  .rev-hist-toggle{
+    border:none; background:none; padding:0; margin:0; font:inherit; font-weight:700; color:inherit;
+    cursor:pointer; text-decoration:underline; text-underline-offset:2px;
+  }
+  .rev-hist-toggle:hover{color:var(--green-dark);}
+  .rev-hist-list{margin-top:8px; padding-top:8px; border-top:1px dashed var(--border); display:flex; flex-direction:column; gap:6px;}
+  .rev-hist-item{display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:.72rem;}
+  .rev-hist-data{color:var(--text-mut); font-variant-numeric:tabular-nums; flex-shrink:0;}
+  .rev-hist-etapa{font-weight:650;}
+  .rev-hist-avulsa{font-size:.65rem; color:var(--text-mut); border:1px solid var(--border); border-radius:20px; padding:1px 7px;}
+  .rev-hist-atraso{font-size:.65rem; color:var(--yellow-dark); background:var(--warn-bg); border-radius:20px; padding:1px 7px;}
+  .rev-hist-vazio{margin-top:8px; padding-top:8px; border-top:1px dashed var(--border); font-size:.72rem; color:var(--text-mut);}
   .rev-item.today{border-color:color-mix(in srgb, var(--green) 40%, var(--border)); background:var(--green-light);}
   .rev-item.later{opacity:.72;}
   .rev-acts{display:flex; gap:5px; flex-shrink:0;}
@@ -6448,6 +6461,12 @@ document.getElementById('btnQuestoesTodas').addEventListener('click', ()=>{
 document.getElementById('questoesBusca').addEventListener('input', e=> renderQuestoes(e.target.value));
 
 function renderMaterias(filter){
+  // ago/2026: roda o auto-fechamento da etapa de exercicios a cada vez que a aba Materias
+  // renderiza (nao so no boot do app ou logo apos responder uma questao) - assim, se o
+  // rec.stage de uma aula ficar "preso" em ETAPA_EXERCICIOS por qualquer motivo externo
+  // (ex: um bug que resetou o registro) mesmo com todas as questoes ja respondidas, o app
+  // se autocorrige no proximo render, sem precisar recarregar a pagina inteira.
+  verificarEtapaExercicios(true);
   filter = (filter||"").toLowerCase().trim();
   const grid = document.getElementById('materiasGrid');
   const det = document.getElementById('materiaDetalhe');
@@ -6740,13 +6759,14 @@ function renderAulasDaMateria(siAlvo, filter){
         e.stopPropagation();
         openStartSessionModal(si,ai);
       });
-      const chk = row.querySelector('.chk');
-      chk.addEventListener('click', (e)=>{
-        e.stopPropagation();
-        toggleStudied(si,ai);
-        renderMaterias(document.getElementById('searchBox').value);
-        renderAll(true);
-      });
+      // ago/2026 (bug reportado pelo Bruno): esse marcador ERA clicavel e chamava toggleStudied(),
+      // que ao desmarcar zerava rec.pagesRead, rec.stage, rec.mastered, rec.nextReview, rec.ease
+      // e rec.reviewHistory - e ao marcar de novo, setPagesRead(...,theory) recontava as paginas
+      // como "novas" em state.pageActivity[hoje], duplicando o total do dia. Ou seja, um clique
+      // duplo (sem querer) apagava o historico de revisao espacada da aula E inflava a contagem
+      // de paginas lidas de hoje. Agora o marcador e so-leitura: reflete rec.studied (Teoria
+      // 100% lida), que so muda automaticamente via setPagesRead atingindo o total de paginas -
+      // nao ha mais nenhum jeito de mexer nele na mao.
       const pageInput = row.querySelector('.page-input');
       pageInput.addEventListener('click', e=> e.stopPropagation());
       pageInput.addEventListener('change', (e)=>{
@@ -6825,23 +6845,12 @@ function fmtDate(iso){
   const [y,m,d] = iso.split('-');
   return d+"/"+m+"/"+y;
 }
-function toggleStudied(si,ai){
-  const rec = getAula(si,ai);
-  if(!rec.studied){
-    setPagesRead(si,ai, theoryPages(si,ai));
-  } else {
-    rec.studied = false;
-    rec.studiedDate = null;
-    rec.stage = 0;
-    rec.mastered = false;
-    rec.nextReview = null;
-    rec.pagesRead = 0;
-    rec.lastReview = null;
-    rec.ease = 1;
-    rec.reviewHistory = [];
-    save();
-  }
-}
+// toggleStudied() foi removida (ago/2026): era a função ligada ao clique no marcador .chk,
+// e o ramo de "desmarcar" zerava pagesRead/stage/mastered/nextReview/ease/reviewHistory - a
+// causa raiz do bug relatado pelo Bruno (clique acidental apagou o histórico de revisão
+// espaçada de uma aula e duplicou a contagem de páginas do dia). O marcador agora é somente
+// leitura (reflete rec.studied, que só muda via setPagesRead ao atingir 100% das páginas) e
+// não há mais nenhum caminho de código que zere esses campos manualmente.
 document.getElementById('searchBox').addEventListener('input', (e)=> renderMaterias(e.target.value));
 
 /* ===================== RENDER: REVISÃO ===================== */
@@ -7171,6 +7180,37 @@ document.getElementById('revCalNext').addEventListener('click', ()=> revCalShift
    registra a revisao avulsa e a nova avaliacao, e pronto. */
 let revRepoFiltro = 'todas';
 let revRepoBusca = '';
+// Quais aulas estao com o historico de revisoes (reviewHistory) expandido no repositorio.
+// Guardado so em memoria (nao precisa persistir) - chave "si|ai", igual state.aulas.
+let revHistAbertos = new Set();
+// Rotulo humano pra uma entrada de rec.reviewHistory: {d, q, stage, atraso?, avulsa?}.
+// stage aqui e o estagio que a aula ESTAVA quando a entrada foi criada - 0 = etapa de
+// exercicios (concluida = fechou e virou a 1a revisao), 1..N = qual revisao espacada foi feita.
+function rotuloEtapaHistorico(entry){
+  if(entry.q==='exercicios') return 'Exercícios concluídos';
+  const n = entry.stage;
+  if(n===1) return '1ª revisão';
+  if(n===2) return '2ª revisão';
+  if(n===3) return '3ª revisão';
+  return 'Revisão (etapa '+n+')';
+}
+function historicoRevisoesHtml(rec){
+  const hist = (rec && rec.reviewHistory) || [];
+  if(!hist.length) return '<div class="rev-hist-vazio">Nenhuma revisão registrada ainda.</div>';
+  // Mais recente primeiro.
+  const ordenado = hist.slice().reverse();
+  return ordenado.map(entry=>{
+    const qInfo = entry.q && REVIEW_QUALITIES[entry.q];
+    const qTag = qInfo ? `<span class="rev-dif ${entry.q}">${qInfo.ic} ${qInfo.label}</span>` : '';
+    const avulsaTag = entry.avulsa ? '<span class="rev-hist-avulsa" title="Revisão de reforço, feita fora do cronograma - não mudou a data da próxima revisão agendada">avulsa</span>' : '';
+    const atrasoTag = (entry.atraso>0) ? `<span class="rev-hist-atraso">${entry.atraso}d de atraso</span>` : '';
+    return `<div class="rev-hist-item">
+      <span class="rev-hist-data">${fmtDate(entry.d)}</span>
+      <span class="rev-hist-etapa">${rotuloEtapaHistorico(entry)}</span>
+      ${qTag}${avulsaTag}${atrasoTag}
+    </div>`;
+  }).join('');
+}
 function aulasRevisaveis(){
   const out = [];
   SUBJECTS.forEach((s,si)=>{
@@ -7237,12 +7277,22 @@ function renderRevisaoRepo(){
       : x.rec.nextReview ? fmtDate(x.rec.nextReview)+' · '+rotuloData(x.rec.nextReview, hoje)
       : 'sem revisão agendada';
     const nRev = (x.rec.reviewHistory||[]).length;
+    const histKey = key(x.si, x.ai);
+    const histAberto = revHistAbertos.has(histKey);
     div.innerHTML = `<div class="info">
         <b>${escapeHtml(x.aula)}</b>
         <small>${escapeHtml(x.subject)}</small>
-        <small class="rev-when">${quando}${nRev? ' · '+nRev+(nRev===1?' revisão feita':' revisões feitas'):''}</small>
+        <small class="rev-when">${quando}${nRev? ' · <button type="button" class="rev-hist-toggle">'+nRev+(nRev===1?' revisão feita':' revisões feitas')+' '+(histAberto?'▲':'▼')+'</button>' : ''}</small>
         <div class="rev-line1" style="margin-top:5px;">${dificuldadeTag(x.rec) || '<span class="rev-dif sem">sem avaliação</span>'}</div>
+        ${histAberto? `<div class="rev-hist-list">${historicoRevisoesHtml(x.rec)}</div>` : ''}
       </div>`;
+    const histToggle = div.querySelector('.rev-hist-toggle');
+    if(histToggle){
+      histToggle.addEventListener('click', ()=>{
+        if(revHistAbertos.has(histKey)) revHistAbertos.delete(histKey); else revHistAbertos.add(histKey);
+        renderRevisaoRepo();
+      });
+    }
     const acts = document.createElement('div');
     acts.className = 'rev-acts';
     const bStart = document.createElement('button');
