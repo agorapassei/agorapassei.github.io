@@ -1166,8 +1166,8 @@
   .quiz-row .quiz-stats b.wrong-cnt{color:var(--danger);}
   .quiz-empty-note{font-size:.74rem; color:var(--text-mut); margin-top:10px; padding-top:10px; border-top:1px dashed var(--border); font-style:italic;}
   .btn.block{width:100%; text-align:center;}
-  .quiz-subbtns{display:flex; gap:8px; margin-top:8px;}
-  .quiz-subbtns .btn{flex:1;}
+  .quiz-subbtns{display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;}
+  .quiz-subbtns .btn{flex:1 1 110px;}
   .quiz-subbtns .btn:disabled{opacity:.4;}
 
   /* Leitura por páginas (dentro da aula) */
@@ -3253,6 +3253,19 @@ function startSession(si, ai, tipo){
   save();
   return true;
 }
+// Chamado ao abrir um quiz (inéditas, gerais, corretas ou erradas) direto da aula, sem passar
+// pelo botao manual "Cronometrar sessao de estudo". Se nao ha sessao ativa nenhuma, inicia uma
+// de tipo 'questoes' silenciosamente (o quiz e a tela principal aqui, entao o cronometro fica
+// minimizado na barra, nao abre por cima o overlay central). Se ja existe uma sessao ativa
+// (de qualquer materia/tipo), nao mexe nela - o usuario decide se encerra antes.
+function ensureQuestoesSessionAtiva(si, ai){
+  if(state.activeSession) return;
+  if(startSession(si, ai, 'questoes')){
+    sessionOverlayMinimized = true;
+    renderTimerBar();
+    toast('Cronômetro iniciado automaticamente (Questões)');
+  }
+}
 function activeSessionElapsedMs(){
   const a = state.activeSession;
   if(!a) return 0;
@@ -5249,6 +5262,14 @@ function correctQuestionsForAula(si,ai){
     return r && r.dominated;
   });
 }
+// Questoes que o usuario nunca respondeu nenhuma vez (ineditas) - diferente de "erradas"
+// (pendenteQuestionsForAula), que ja foram tentadas ao menos uma vez mas ainda nao dominadas.
+function ineditasQuestionsForAula(si,ai){
+  return bankFor(si,ai).filter(q=>{
+    const r = state.questions[q.id];
+    return !r || !r.attempts;
+  });
+}
 function pendenteQuestionsForSubject(si){
   const out = [];
   SUBJECTS[si].aulas.forEach((a,ai)=>{ out.push(...pendenteQuestionsForAula(si,ai)); });
@@ -6678,10 +6699,12 @@ function renderAulasDaMateria(siAlvo, filter){
           if(r && r.attempts){ answered++; if(r.dominated) dominated++; }
         });
         const pendCount = answered - dominated;
+        const ineditasCount = bankQs.length - answered;
         quizHtml = `<div class="quiz-row">
           <button class="btn sm block quiz-btn"><svg class=ic-svg aria-hidden=true><use href=#ic-quiz></use></svg> Responder questões (${bankQs.length})</button>
           <div class="quiz-stats">${answered}/${bankQs.length} vistas · <b>${dominated}</b> dominadas${answered?' ('+Math.round(dominated/answered*100)+'%)':''}</div>
           <div class="quiz-subbtns">
+            <button class="btn sm ghost quiz-new-btn" ${ineditasCount===0?'disabled':''}><svg class=ic-svg aria-hidden=true><use href=#ic-plus></use></svg> Inéditas (${ineditasCount})</button>
             <button class="btn sm ghost quiz-correct-btn" ${dominated===0?'disabled':''}><svg class=ic-svg aria-hidden=true><use href=#ic-check></use></svg> Ver corretas (${dominated})</button>
             <button class="btn sm ghost quiz-pend-btn" ${pendCount===0?'disabled':''}><svg class=ic-svg aria-hidden=true><use href=#ic-refazer></use></svg> Responder erradas (${pendCount})</button>
           </div>
@@ -6740,13 +6763,26 @@ function renderAulasDaMateria(siAlvo, filter){
       });
       const quizBtn = row.querySelector('.quiz-btn');
       if(quizBtn){
-        quizBtn.addEventListener('click', ()=> startQuiz(bankQs, s.name+' · Aula '+a));
+        quizBtn.addEventListener('click', ()=>{
+          ensureQuestoesSessionAtiva(si,ai);
+          startQuiz(bankQs, s.name+' · Aula '+a);
+        });
+      }
+      const newBtn = row.querySelector('.quiz-new-btn');
+      if(newBtn){
+        newBtn.addEventListener('click', ()=>{
+          const qs = ineditasQuestionsForAula(si,ai);
+          if(!qs.length){ toast('Nenhuma questão inédita nesta aula.'); return; }
+          ensureQuestoesSessionAtiva(si,ai);
+          startQuiz(qs, s.name+' · Aula '+a+' · Inéditas');
+        });
       }
       const correctBtn = row.querySelector('.quiz-correct-btn');
       if(correctBtn){
         correctBtn.addEventListener('click', ()=>{
           const qs = correctQuestionsForAula(si,ai);
           if(!qs.length){ toast('Nenhuma questão dominada ainda nesta aula.'); return; }
+          ensureQuestoesSessionAtiva(si,ai);
           startQuiz(qs, s.name+' · Aula '+a+' · Corretas', 'review');
         });
       }
@@ -6755,6 +6791,7 @@ function renderAulasDaMateria(siAlvo, filter){
         pendBtn.addEventListener('click', ()=>{
           const qs = pendenteQuestionsForAula(si,ai);
           if(!qs.length){ toast('Nenhuma questão pendente nesta aula'); return; }
+          ensureQuestoesSessionAtiva(si,ai);
           startQuiz(qs, s.name+' · Aula '+a+' · Refazer');
         });
       }
