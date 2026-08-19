@@ -3445,6 +3445,18 @@ function ensureQuestoesSessionAtiva(si, ai){
     toast('Cronômetro iniciado automaticamente (Questões)');
   }
 }
+// Rotulo de exibicao pra uma sessao ativa - trata os casos em que si/ai podem ser null (19/08/
+// 2026, decisao do Bruno: TODO quiz de questoes inicia cronometro automaticamente, mesmo os que
+// misturam questoes de varias materias - ver startQuiz). si=null: quiz misturou 2+ materias
+// diferentes, o tempo conta pro total geral mas NAO entra na meta de nenhuma materia no Ciclo
+// (nao da pra saber quanto foi de cada uma). ai=null: quiz de uma materia so, mas questoes de
+// varias aulas dela. Sessoes de teoria/revisao sempre tem si/ai validos (nunca passam por aqui).
+function activeSessionSubjectLabel(a){
+  if(a.si==null) return 'Várias matérias';
+  const subj = SUBJECTS[a.si];
+  if(a.ai==null) return subj.name;
+  return subj.name + ' · Aula ' + subj.aulas[a.ai];
+}
 function activeSessionElapsedMs(){
   const a = state.activeSession;
   if(!a) return 0;
@@ -6946,7 +6958,6 @@ function renderAulasDaMateria(siAlvo, filter){
       const quizBtn = row.querySelector('.quiz-btn');
       if(quizBtn){
         quizBtn.addEventListener('click', ()=>{
-          ensureQuestoesSessionAtiva(si,ai);
           startQuiz(bankQs, s.name+' · Aula '+a);
         });
       }
@@ -6955,7 +6966,6 @@ function renderAulasDaMateria(siAlvo, filter){
         newBtn.addEventListener('click', ()=>{
           const qs = ineditasQuestionsForAula(si,ai);
           if(!qs.length){ toast('Nenhuma questão inédita nesta aula.'); return; }
-          ensureQuestoesSessionAtiva(si,ai);
           startQuiz(qs, s.name+' · Aula '+a+' · Inéditas');
         });
       }
@@ -6964,7 +6974,6 @@ function renderAulasDaMateria(siAlvo, filter){
         correctBtn.addEventListener('click', ()=>{
           const qs = correctQuestionsForAula(si,ai);
           if(!qs.length){ toast('Nenhuma questão dominada ainda nesta aula.'); return; }
-          ensureQuestoesSessionAtiva(si,ai);
           startQuiz(qs, s.name+' · Aula '+a+' · Corretas', 'review');
         });
       }
@@ -6973,7 +6982,6 @@ function renderAulasDaMateria(siAlvo, filter){
         pendBtn.addEventListener('click', ()=>{
           const qs = pendenteQuestionsForAula(si,ai);
           if(!qs.length){ toast('Nenhuma questão pendente nesta aula'); return; }
-          ensureQuestoesSessionAtiva(si,ai);
           startQuiz(qs, s.name+' · Aula '+a+' · Refazer');
         });
       }
@@ -8969,12 +8977,38 @@ function shuffleArray(arr){
   for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; }
   return arr;
 }
+// 19/08/2026 (decisao do Bruno): descobre a materia/aula de um lote de questoes olhando pra
+// qidAulaMap - usado por startQuiz pra saber com qual escopo iniciar o cronometro automatico.
+// Se todas as questoes sao da mesma materia E mesma aula, retorna os dois. Se sao da mesma
+// materia mas espalhadas em varias aulas dela, retorna so o si (ai=null). Se misturam
+// materias diferentes (ex.: "Todas as questões", "Favoritos", "Refazer todas as erradas"),
+// retorna os dois null - a sessao ainda assim eh iniciada, so "sem materia" (ver
+// activeSessionSubjectLabel e ensureQuestoesSessionAtiva).
+function inferirEscopoQuiz(questions){
+  const map = qidAulaMap();
+  let si=null, ai=null, siOk=true, aiOk=true, primeira=true;
+  questions.forEach(q=>{
+    const loc = map[q.id];
+    if(!loc) return;
+    if(primeira){ si=loc.si; ai=loc.ai; primeira=false; }
+    else {
+      if(si!==loc.si) siOk=false;
+      if(ai!==loc.ai) aiOk=false;
+    }
+  });
+  return { si: siOk ? si : null, ai: (siOk && aiOk) ? ai : null };
+}
 /* Quiz das apostilas. Provas anteriores NAO passam por aqui: elas tem motor
    proprio (renderCaderno), porque sao lidas na pagina digitalizada do caderno. */
 function startQuiz(questions, title, mode){
   if(!questions || questions.length===0){ toast('Nenhuma questão disponível para esta aula.'); return; }
   quizState = { questions: shuffleArray(questions.slice()), idx:0, title,
                 mode: mode||'quiz', answers:{}, iniciadoEm: Date.now() };
+  // 19/08/2026 (decisao do Bruno): TODO quiz inicia cronometro automaticamente, sem excecao -
+  // nao deve existir a opcao de responder questoes sem cronometro rodando. Funciona mesmo pra
+  // quizzes que misturam materias (ver inferirEscopoQuiz/activeSessionSubjectLabel).
+  const escopo = inferirEscopoQuiz(quizState.questions);
+  ensureQuestoesSessionAtiva(escopo.si, escopo.ai);
   document.getElementById('quizOverlay').classList.add('show');
   renderQuizQuestion();
 }
@@ -9293,9 +9327,8 @@ function renderTimerBar(){
     if(timerInterval){ clearInterval(timerInterval); timerInterval=null; }
     return;
   }
-  const subj = SUBJECTS[a.si];
-  const aulaNm = subj.aulas[a.ai];
-  const lbl = `${subj.name} · Aula ${aulaNm} · ${sessaoTipoInfo(a.tipo).label}${a.paused?' · pausado':''}`;
+  const subjLbl = activeSessionSubjectLabel(a);
+  const lbl = `${subjLbl} · ${sessaoTipoInfo(a.tipo).label}${a.paused?' · pausado':''}`;
   const clockTxt = fmtHMS(activeSessionElapsedMs()/1000);
 
   // Barra minimizada: sempre atualizada enquanto há sessão ativa (mesmo com o overlay aberto,
@@ -9312,7 +9345,7 @@ function renderTimerBar(){
     overlay.classList.remove('show');
   } else {
     overlay.classList.add('show');
-    document.getElementById('stovSubj').textContent = `${subj.name} · Aula ${aulaNm}`;
+    document.getElementById('stovSubj').textContent = subjLbl;
     document.getElementById('stovClock').textContent = clockTxt;
     document.getElementById('stovPlayBtn').innerHTML = a.paused
       ? '<svg class=ic-svg aria-hidden=true><use href=#ic-play></use></svg>'
@@ -9603,7 +9636,7 @@ function renderTempo(){
     activeCard.style.display = '';
     const a = state.activeSession;
     document.getElementById('tempoActiveInfo').innerHTML = `
-      <div style="font-size:.9rem; margin-bottom:8px;"><b>${SUBJECTS[a.si].name}</b> · Aula ${SUBJECTS[a.si].aulas[a.ai]} · ${sessaoTipoInfo(a.tipo).label}</div>
+      <div style="font-size:.9rem; margin-bottom:8px;"><b>${escapeHtml(activeSessionSubjectLabel(a))}</b> · ${sessaoTipoInfo(a.tipo).label}</div>
       <div style="font-size:1.8rem; font-weight:800; color:var(--green-dark);">${fmtHMS(activeSessionElapsedMs()/1000)}</div>`;
   } else {
     activeCard.style.display = 'none';
