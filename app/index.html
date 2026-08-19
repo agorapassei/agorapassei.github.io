@@ -2874,8 +2874,7 @@ function reagendarRevisoesMateria(si){
 // Todas as aulas com revisao pendente (nao dominadas, em materias ativas do ciclo).
 function revisoesPendentes(){
   const out = [];
-  SUBJECTS.forEach((s,si)=>{
-    if(!isSubjectActive(si)) return;
+  Metricas.materiasAtivas().forEach(({s,si})=>{
     s.aulas.forEach((a,ai)=>{
       const rec = state.aulas[key(si,ai)];
       if(rec && rec.studied && !rec.mastered && rec.nextReview){
@@ -3203,10 +3202,10 @@ function pagesReadForSubject(si){
 // some de toda estimativa/progresso geral do app — inclusive dessas somas — conforme
 // configurado na aba Ciclo (ver isSubjectActive, mais abaixo, perto do motor do ciclo).
 function totalTheoryAll(){
-  return SUBJECTS.reduce((sum,s,si)=> isSubjectActive(si) ? sum + totalTheoryForSubject(si) : sum, 0);
+  return Metricas.materiasAtivas().reduce((sum,{si})=> sum + totalTheoryForSubject(si), 0);
 }
 function pagesReadAll(){
-  return SUBJECTS.reduce((sum,s,si)=> isSubjectActive(si) ? sum + pagesReadForSubject(si) : sum, 0);
+  return Metricas.materiasAtivas().reduce((sum,{si})=> sum + pagesReadForSubject(si), 0);
 }
 function setPagesRead(si, ai, newVal){
   const theory = theoryPages(si,ai);
@@ -3666,7 +3665,7 @@ function ritmoResolucaoMateria(si){
 function ritmoResolucaoGlobal(){
   const tempo = tempoTotalQuestoes();
   let qtd=0;
-  SUBJECTS.forEach((s,si)=>{ if(!isSubjectActive(si)) return; s.aulas.forEach((a,ai)=>{ qtd+=questoesRespondidasApostila(si,ai); }); });
+  Metricas.materiasAtivas().forEach(({s,si})=>{ s.aulas.forEach((a,ai)=>{ qtd+=questoesRespondidasApostila(si,ai); }); });
   return qtd>0? tempo/qtd : null;
 }
 function ritmoResolucaoEfetivo(si,ai){
@@ -3689,7 +3688,7 @@ function tempoRestanteMateria(si){
 }
 function tempoRestanteTotalTeoria(){
   let total=0, any=false;
-  SUBJECTS.forEach((s,si)=>{ if(!isSubjectActive(si)) return; const t=tempoRestanteMateria(si); if(t!=null){ total+=t; any=true; } });
+  Metricas.materiasAtivas().forEach(({si})=>{ const t=tempoRestanteMateria(si); if(t!=null){ total+=t; any=true; } });
   return any? total : null;
 }
 function tempoRestanteQuestoesApostila(si,ai){
@@ -3707,7 +3706,7 @@ function tempoRestanteQuestoesMateria(si){
 }
 function tempoRestanteTotalQuestoes(){
   let total=0, any=false;
-  SUBJECTS.forEach((s,si)=>{ if(!isSubjectActive(si)) return; const t=tempoRestanteQuestoesMateria(si); if(t!=null){ total+=t; any=true; } });
+  Metricas.materiasAtivas().forEach(({si})=>{ const t=tempoRestanteQuestoesMateria(si); if(t!=null){ total+=t; any=true; } });
   return any? total : null;
 }
 
@@ -3776,8 +3775,7 @@ function tempoRestanteTotalConsolidado(){
 // tanto pra montar o ciclo quanto pra exibir aqui na distribuicao.)
 function distribuicaoTempoPorMateria(){
   const total = tempoTotalGeral();
-  return SUBJECTS.filter((s,si)=>isSubjectActive(si)).map((s)=>{
-    const si = SUBJECTS.indexOf(s);
+  return Metricas.materiasAtivas().map(({s,si})=>{
     const t = tempoTotalMateria(si);
     return { si, name:s.name, tempoSegundos:t, pct: total? Math.round(t/total*100):0, peso: getCicloPeso(si) };
   });
@@ -3870,7 +3868,7 @@ function tendenciaAcertoMateria(si, janelaDias){
 // Monta as linhas da tabela "Análise geral" - uma por matéria ativa, combinando o total
 // histórico (subjectAccuracy) com a comparação de período (tendenciaAcertoMateria).
 function buildAnaliseDesempenhoRows(){
-  return SUBJECTS.map((s,si)=>({s,si})).filter(x=>isSubjectActive(x.si)).map(({s,si})=>{
+  return Metricas.materiasAtivas().map(({s,si})=>{
     const stat = subjectAccuracy(si);
     const trend = tendenciaAcertoMateria(si, 30);
     return { si, name:s.name, attempts:stat.attempts, correct:stat.correct, pct:stat.pct, trend };
@@ -4082,8 +4080,7 @@ function registrarHistoricoCiclo(fimTs, completo){
   if(!Array.isArray(state.historicoCiclos)) state.historicoCiclos = [];
   const desvios = {};
   const atrasadas = [];
-  SUBJECTS.forEach((s,si)=>{
-    if(!isSubjectActive(si)) return;
+  Metricas.materiasAtivas().forEach(({s,si})=>{
     const meta = cicloMetaSegundos(si);
     if(meta<=0) return;
     const estudado = cicloEstudadoSegundos(si);
@@ -4401,13 +4398,12 @@ function gerarSemanaCalendario(forcar){
   // proporcional normal.
   let baseMaterias = {};
   let temDeficit = false;
-  SUBJECTS.forEach((s,si)=>{
-    if(!isSubjectActive(si)) return;
+  Metricas.materiasAtivas().forEach(({si})=>{
     const deficit = Math.max(0, cicloMetaSegundos(si)-cicloEstudadoSegundos(si));
     if(deficit>0){ baseMaterias[si] = deficit; temDeficit = true; }
   });
   if(!temDeficit){
-    SUBJECTS.forEach((s,si)=>{ if(isSubjectActive(si) && getCicloPeso(si)>0) baseMaterias[si]=getCicloPeso(si); });
+    Metricas.materiasAtivas().forEach(({si})=>{ if(getCicloPeso(si)>0) baseMaterias[si]=getCicloPeso(si); });
   }
   if(Object.keys(baseMaterias).length===0 || totalUnid15<=0){
     DIAS_SEMANA.forEach(d=> c.blocos[d]=[]);
@@ -5376,8 +5372,7 @@ document.addEventListener('click', ()=> document.querySelectorAll('.widget-size-
 /* ===================== RENDER: PAINEL ===================== */
 function computeTotals(){
   let total=0, studied=0;
-  SUBJECTS.forEach((s,si)=>{
-    if(!isSubjectActive(si)) return;
+  Metricas.materiasAtivas().forEach(({s,si})=>{
     s.aulas.forEach((a,ai)=>{
       total++;
       const rec = state.aulas[key(si,ai)];
@@ -5439,8 +5434,7 @@ function computeDominioEdital(){
 // calculadora de "meta por data alvo" (aba Metas) pra saber quantas questoes ainda faltam.
 function totalQuestoesAll(){
   let total=0;
-  SUBJECTS.forEach((s,si)=>{
-    if(!isSubjectActive(si)) return;
+  Metricas.materiasAtivas().forEach(({s,si})=>{
     s.aulas.forEach((a,ai)=>{ total+=bankFor(si,ai).length; });
   });
   return total;
@@ -5482,7 +5476,7 @@ function pendenteQuestionsForSubject(si){
 }
 function allPendenteQuestions(){
   let out = [];
-  SUBJECTS.forEach((s,si)=>{ if(!isSubjectActive(si)) return; out = out.concat(pendenteQuestionsForSubject(si)); });
+  Metricas.materiasAtivas().forEach(({si})=>{ out = out.concat(pendenteQuestionsForSubject(si)); });
   return out;
 }
 // aliases (compat com nomes antigos usados na aba "Refazer")
@@ -5512,8 +5506,7 @@ function favoriteCount(){ return Object.keys(state.favorites||{}).length; }
 function dueReviews(){
   const today = todayStr();
   const list=[];
-  SUBJECTS.forEach((s,si)=>{
-    if(!isSubjectActive(si)) return;
+  Metricas.materiasAtivas().forEach(({s,si})=>{
     s.aulas.forEach((a,ai)=>{
       const rec = state.aulas[key(si,ai)];
       if(rec && rec.studied && !rec.mastered && rec.nextReview && rec.nextReview<=today){
@@ -5839,7 +5832,7 @@ function buildRankingHtml(){
 }
 function buildProgressoMateriasHtml(){
   // So matérias ativas — as fora do ciclo somem daqui (e do total abaixo) até serem reativadas.
-  const rows = subjectsOrdenadas().filter(({si})=>isSubjectActive(si)).map(({s,si})=>{
+  const rows = Metricas.materiasAtivasOrdenadas().map(({s,si})=>{
     const subjTotalPages = totalTheoryForSubject(si);
     const subjReadPages = pagesReadForSubject(si);
     const p = subjTotalPages? Math.round(subjReadPages/subjTotalPages*100):0;
@@ -5892,8 +5885,7 @@ function buildTempoTotalListaHtml(modo, periodo){
     return buildTempoListaHtml(rows, 'Nenhum simulado feito nesse período ainda.');
   }
   const sessions = sessionsNoPeriodo(periodo);
-  const rows = SUBJECTS.filter((s,si)=>isSubjectActive(si)).map((s)=>{
-    const si = SUBJECTS.indexOf(s);
+  const rows = Metricas.materiasAtivas().map(({s,si})=>{
     return { name:s.name, tempo: tempoTotalMateriaPorModo(si, modo, sessions)||0 };
   }).filter(r=>r.tempo>0).sort((a,b)=>b.tempo-a.tempo);
   return buildTempoListaHtml(rows, 'Nenhuma sessão de estudo registrada nesse período ainda.');
@@ -5910,8 +5902,7 @@ function buildTempoRestanteTrioHtml(nivel, scopeParam){
   return `<div class="widget-trio-row">${blocos}</div>`;
 }
 function buildTempoRestanteListaHtml(modo){
-  const rows = SUBJECTS.filter((s,si)=>isSubjectActive(si)).map((s)=>{
-    const si = SUBJECTS.indexOf(s);
+  const rows = Metricas.materiasAtivas().map(({s,si})=>{
     return { name:s.name, tempo: tempoRestanteMateriaPorModo(si, modo)||0 };
   }).filter(r=>r.tempo>0).sort((a,b)=>b.tempo-a.tempo);
   return buildTempoListaHtml(rows, 'Sem dados suficientes ainda para estimar o tempo restante por matéria.');
@@ -6099,8 +6090,7 @@ function filaHojeHtml(){
   const hoje = todayStr();
   const dias = iso => Math.round((Date.parse(hoje+'T00:00:00Z') - Date.parse(iso+'T00:00:00Z'))/864e5);
   const itens = [];
-  SUBJECTS.forEach((s,si)=>{
-    if(!isSubjectActive(si)) return;
+  Metricas.materiasAtivas().forEach(({s,si})=>{
     const fora = false;
     s.aulas.forEach((a,ai)=>{
       const rec = state.aulas[key(si,ai)];
@@ -6161,8 +6151,8 @@ function ciclosPendentesHtml(){
   const c = state.ciclo;
   if(!c || !c.horasPorSemana || cicloPesoTotal() <= 0) return '';
 
-  const todas = SUBJECTS.map((s,si)=>({ s, si }))
-    .filter(({si}) => isSubjectActive(si) && getCicloPeso(si) > 0)
+  const todas = Metricas.materiasAtivas()
+    .filter(({si}) => getCicloPeso(si) > 0)
     .map(({s,si}) => {
       const meta = cicloMetaSegundos(si);
       const feito = cicloEstudadoSegundos(si);
@@ -6524,8 +6514,7 @@ function statsForQuestions(qs){
 }
 function allActiveQuestions(){
   const out = [];
-  SUBJECTS.forEach((s,si)=>{
-    if(!isSubjectActive(si)) return;
+  Metricas.materiasAtivas().forEach(({s,si})=>{
     s.aulas.forEach((a,ai)=> out.push(...bankFor(si,ai)));
   });
   return out;
@@ -6566,7 +6555,7 @@ function renderQuestoes(filterArg){
   });
 
   listaEl.innerHTML = '';
-  const ativos = subjectsOrdenadas().filter(({si})=>isSubjectActive(si));
+  const ativos = Metricas.materiasAtivasOrdenadas();
 
   if(questoesModo==='materia'){
     const grid = document.createElement('div');
@@ -6680,7 +6669,7 @@ function renderMateriasGrid(filter){
   // So matérias ativas aparecem aqui — uma matéria desmarcada em Ciclo → Replanejar
   // some da grade (e de tudo mais) até ser reativada; os dados dela continuam
   // guardados, só saem das contas na tela.
-  subjectsOrdenadas().filter(({si})=>isSubjectActive(si)).forEach(({s,si})=>{
+  Metricas.materiasAtivasOrdenadas().forEach(({s,si})=>{
     if(filter){
       const bate = s.name.toLowerCase().includes(filter) || s.aulas.some(a=>a.toLowerCase().includes(filter));
       if(!bate) return;
@@ -7243,7 +7232,7 @@ function renderRevisaoResumo(){
   const in7 = addDays(today,7);
   const semana = items.filter(i=>i.rec.nextReview>today && i.rec.nextReview<=in7).length;
   let dominadas = 0;
-  SUBJECTS.forEach((s,si)=>{ if(!isSubjectActive(si)) return; s.aulas.forEach((a,ai)=>{
+  Metricas.materiasAtivas().forEach(({s,si})=>{ s.aulas.forEach((a,ai)=>{
     const r = state.aulas[key(si,ai)]; if(r && r.mastered) dominadas++;
   });});
 
@@ -9580,7 +9569,7 @@ function renderTempoManualForm(){
   wrap.innerHTML = `
     <div class="form-row">
       <label>Matéria</label>
-      <select id="manualMateria">${SUBJECTS.map((s,si)=>({s,si})).filter(({si})=>isSubjectActive(si)).map(({s,si})=>`<option value="${si}">${s.name}</option>`).join('')}</select>
+      <select id="manualMateria">${Metricas.materiasAtivas().map(({s,si})=>`<option value="${si}">${s.name}</option>`).join('')}</select>
     </div>
     <div class="form-row">
       <label>Aula / apostila</label>
