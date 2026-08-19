@@ -7485,6 +7485,19 @@ const MESES_LABEL = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julh
 // heatmap antigo - so ganhou 'fora' pros dias fora do intervalo De/Ate e 'vazio' pro
 // preenchimento antes do dia 1 / depois do ultimo dia, pra alinhar as colunas com DIAS_SEMANA
 // (Seg..Dom, mesma convencao do Calendario da Semana do Ciclo)).
+// Soma, pra UM dia (iso local, ver dataLocalDe), o tempo estudado, questoes respondidas e
+// paginas lidas nesse dia - usado no tooltip do Calendario de estudos (ago/2026, pedido do
+// Bruno: "ao passar o mouse deve aparecer quantas horas, quantas questoes, quantas paginas").
+// Paginas usa state.pageActivity (ja acumulado por dia local, ver setPagesRead) em vez de somar
+// sessao a sessao, porque uma sessao de teoria nao guarda "quantas paginas novas" - so o
+// intervalo [inicio,fim] lido NAQUELA sessao, que pode se sobrepor a progresso de outro dia.
+function estatisticasDoDia(iso){
+  const sessoesDoDia = state.sessions.filter(s=> dataLocalDe(s.timestampFim)===iso);
+  const segundos = sumTempo(sessoesDoDia);
+  const questoes = sessoesDoDia.reduce((sum,s)=> sum + (s.tipo==='questoes'? questoesRespondidasNaSessao(s) : 0), 0);
+  const paginas = state.pageActivity[iso] || 0;
+  return { segundos, questoes, paginas };
+}
 function buildMesCalendarioHtml(ano, mes, deStr, ateStr){ // mes: 0-11
   const diasNoMes = new Date(ano, mes+1, 0).getDate();
   const dowPrimeiro = (new Date(ano, mes, 1).getDay()+6)%7; // 0=seg..6=dom
@@ -7496,7 +7509,12 @@ function buildMesCalendarioHtml(ano, mes, deStr, ateStr){ // mes: 0-11
     const dentroRange = (!deStr || iso>=deStr) && (!ateStr || iso<=ateStr);
     const estudou = !!state.activity[iso];
     const cls = 'd'+(dentroRange?'':' fora')+(estudou?' on':'')+(iso===hojeIso?' today':'');
-    celulas += `<div class="${cls}" title="${fmtDate(iso)}${estudou?' — dia com estudo registrado':''}">${dia}</div>`;
+    let titulo = fmtDate(iso);
+    if(estudou){
+      const st = estatisticasDoDia(iso);
+      titulo += ` — ${fmtHorasMin(st.segundos)} estudados · ${st.questoes} questão${st.questoes===1?'':'ões'} · ${st.paginas} página${st.paginas===1?'':'s'} lida${st.paginas===1?'':'s'}`;
+    }
+    celulas += `<div class="${cls}" title="${escapeHtml(titulo)}">${dia}</div>`;
   }
   return `<div class="cal-mes-bloco">
     <div class="cal-mes-titulo">${MESES_LABEL[mes]} de ${ano}</div>
