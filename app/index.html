@@ -3752,10 +3752,16 @@ function consistencia(diasPeriodo){
   if(diasReais!=null) diasPeriodo = Math.min(diasPeriodo, diasReais);
   const today = todayStr();
   let diasComSessao=0, tempoTotal=0;
+  // 19/08/2026 (decisao do Bruno): "dia estudado" aqui usa a MESMA definicao do streak/calendario
+  // (Metricas.diaTemAtividade - qualquer atividade real: sessao, pagina, questao, revisao ou
+  // prova), nao mais so dias com sessao cronometrada. Antes esse numero podia ser mais estrito
+  // (e por isso menor) que o streak mostrado na mesma aba, sem nenhuma explicacao visivel disso -
+  // exatamente o tipo de divergencia entre telas que o repositorio unico de metricas existe pra
+  // evitar (ver secao 10 do documento de regras).
   for(let i=0;i<diasPeriodo;i++){
     const d = addDays(today,-i);
-    const sessoesNoDia = state.sessions.filter(s=> dataLocalDe(s.timestampFim)===d);
-    if(sessoesNoDia.length){ diasComSessao++; tempoTotal += sumTempo(sessoesNoDia); }
+    if(Metricas.diaTemAtividade(d)) diasComSessao++;
+    tempoTotal += Metricas.tempoNoDia(d);
   }
   return {
     diasComSessao, diasPeriodo,
