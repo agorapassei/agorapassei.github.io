@@ -3365,6 +3365,45 @@ const Metricas = {
     }
     return { seen, dominated, pct: seen? Math.round(dominated/seen*100) : null };
   },
+  // ---- TENTATIVAS DE QUESTOES, NAO DISTINTAS (19/08/2026, pedido do Bruno) ----
+  // Diferente de dominioQuestoes().seen (que conta cada questao 1 vez, nao importa quantas
+  // tentativas), aqui e o total de vezes que voce respondeu QUALQUER questao, contando
+  // repetidas - "quantas questoes eu respondi", no sentido de volume de pratica. Fonte:
+  // state.questions[qid].attempts, o contador por questao (unica fonte, so incrementado em
+  // recordAnswer) - aqui e so a soma, mesmo criterio de escopo/materia-ativa do dominioQuestoes.
+  tentativasQuestoes(scope){
+    const si = scope && scope.si!=null ? scope.si : null;
+    let total = 0;
+    if(si!=null){
+      const aulas = (window.QUESTION_BANK && QUESTION_BANK[si]) || [];
+      aulas.forEach(qs=> qs.forEach(q=>{
+        const r = state.questions[q.id];
+        if(r) total += (r.attempts||0);
+      }));
+    } else {
+      const qsi = qidSubjectMap();
+      Object.entries(state.questions||{}).forEach(([qid,r])=>{
+        const s = qsi[qid];
+        if(s!=null && !isSubjectActive(s)) return;
+        total += (r.attempts||0);
+      });
+    }
+    return total;
+  },
+  // ---- MATERIAS ATIVAS (19/08/2026, decisao do Bruno) ----
+  // Unica fonte de "quais materias estao ativas no ciclo" - antes, ~15 lugares no codigo
+  // filtravam SUBJECTS com isSubjectActive inline, cada um por conta propria. isSubjectActive()
+  // em si sempre foi consistente (nao havia bug), mas o risco era uma tela nova colar um filtro
+  // EXTRA (ex.: so materias com questao cadastrada, como o Ranking ja fazia) sem essa regra se
+  // propagar pras outras telas. materiasAtivas() preserva {s,si} na ordem bruta de SUBJECTS (a
+  // mesma ordem de armazenamento); materiasAtivasOrdenadas() e a mesma lista em ordem alfabetica
+  // de exibicao (ver subjectsOrdenadas). Chame uma dessas em vez de filtrar isSubjectActive na mao.
+  materiasAtivas(){
+    return SUBJECTS.map((s,si)=>({s,si})).filter(({si})=> isSubjectActive(si));
+  },
+  materiasAtivasOrdenadas(){
+    return subjectsOrdenadas().filter(({si})=> isSubjectActive(si));
+  },
 };
 
 /* ===================== SESSÕES DE ESTUDO / CRONÔMETRO ===================== */
@@ -5744,12 +5783,16 @@ function buildRankingHtml(){
   // 'taxa_dominio') — percentual e legenda passam a ser contra o TOTAL de questões do banco de
   // cada matéria, não só as já tentadas. Por isso agora entram no ranking todas as matérias
   // ativas com questões cadastradas, mesmo com 0 tentadas (aparecem com 0%, o que é esperado).
-  const ranked = SUBJECTS.map((s,si)=> {
+  // 19/08/2026: a lista-base agora vem de Metricas.materiasAtivas() (fonte única de "matéria
+  // ativa" - ver seção 10 do documento de regras). O filtro `total>0` ABAIXO é EXTRA, só deste
+  // ranking (não faz sentido ranquear uma matéria sem nenhuma questão cadastrada) - de propósito
+  // não é parte do critério geral de matéria ativa, só uma regra local desta tela.
+  const ranked = Metricas.materiasAtivas().map(({s,si})=> {
     const m = subjectMastery(si);
     const total = totalQuestoesForSubject(si);
     const pct = total? Math.round(m.dominated/total*100) : null;
     return { si, name:s.name, dominated:m.dominated, total, pct };
-  }).filter(r=> isSubjectActive(r.si) && r.total>0 && r.pct!=null).sort((a,b)=> b.pct-a.pct);
+  }).filter(r=> r.total>0 && r.pct!=null).sort((a,b)=> b.pct-a.pct);
   if(ranked.length===0) return '<div class="empty">Cadastre questões nas aulas para ver aqui em quais matérias você está dominando mais e menos.</div>';
   return ranked.map((r,i)=>{
     const cls = r.pct>=70? 'good' : (r.pct>=50? 'mid' : 'bad');
