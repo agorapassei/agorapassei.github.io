@@ -2692,7 +2692,43 @@ function defaultState(){
     sessions:[], activeSession:null, subjectWeights:{}, dashboard:null, ciclo:null,
     settings:{ theme:'dark', accent:'apostila', pomodoro:{ focusMin:30, breakMin:10 } }, metaDataAlvo:null, answerLog:[], historicoCiclos:[],
     favorites:{}, onboardingDone:false, onboarding:null,
-    reportes:[], provas:{}, stagesExercMigrado:true, calendario:null };
+    reportes:[], provas:{}, stagesExercMigrado:true, calendario:null,
+    // 19/08/2026 (merge real de sincronizacao - ver MERGE DE ESTADOS mais abaixo):
+    // deviceId identifica ESTE aparelho/instalacao - nunca sincroniza por cima dele mesmo
+    // (syncApplyCloudRow preserva o deviceId local). idsMigrado flags = true numa instalacao
+    // nova pois ela ja nasce com tudo no formato novo (ids em pageEvents/answerLog/reviewHistory,
+    // contadores de questoes por aparelho) - so instalacoes antigas precisam da migracao.
+    deviceId: uid(), mergeIdsMigrado: true };
+}
+// Flags de migracao "de mao unica" (pageEventsMigrado, stagesExercMigrado, mergeIdsMigrado -
+// ver migrateState) precisam nascer como `true` em defaultState() pra uma instalacao NOVA nao
+// ter nada pra migrar. Mas isso cria uma armadilha: Object.assign(defaultState(), parsed) so
+// sobrescreve chaves que EXISTEM em parsed - se um backup ANTIGO nunca teve essa chave (porque
+// foi salvo antes dela existir), o `true` de defaultState() "vaza" por baixo do pano pro objeto
+// final, e o guard `if(!s.xxxMigrado)` dentro de migrateState() ve a flag ja true e PULA a
+// migracao de verdade, mesmo sem nunca ter rodado - perdendo o dado antigo em vez de convertê-lo
+// (bug encontrado em 19/08/2026 durante o design do merge de sincronizacao, antes de qualquer
+// deploy - ver regras-sistema-horas.md secao 10). A correcao: qualquer flag dessa lista que o
+// backup bruto (parsed, ANTES do assign) nao tinha de verdade volta pra "nao migrado" antes de
+// migrateState() decidir - so assim o guard consegue distinguir "instalacao nova, nada a
+// migrar" de "backup antigo que nunca passou por essa migracao".
+// IMPORTANTE: essa const PRECISA ficar declarada antes de "let state = load();" (mais abaixo) -
+// load() roda IMEDIATAMENTE na carga do script, e const/let tem TDZ (nao existem de verdade ate
+// a linha da declaracao rodar); declarar isso DEPOIS de "let state = load();" faz load() jogar
+// ReferenceError, cair no catch, e devolver defaultState() SEMPRE - silenciosamente descartando
+// o progresso salvo de qualquer conta real (bug proprio encontrado testando a correcao acima,
+// nunca chegou a ser publicado).
+const MIGRATION_GUARD_FLAGS = ['pageEventsMigrado', 'stagesExercMigrado', 'mergeIdsMigrado'];
+// Ponto UNICO onde um blob de dados bruto (localStorage, arquivo de backup importado, linha da
+// nuvem) vira um estado utilizavel: junta com defaultState() e corrige o vazamento acima ANTES
+// de chamar migrateState(). Qualquer lugar do app que faca "Object.assign(defaultState(), X)"
+// com dado que pode ser antigo (nao um `state` já migrado em memória) deve passar por aqui.
+function mergeWithDefaults(parsed){
+  const merged = Object.assign(defaultState(), parsed||{});
+  MIGRATION_GUARD_FLAGS.forEach(flag=>{
+    if(!Object.prototype.hasOwnProperty.call(parsed||{}, flag)) merged[flag] = false;
+  });
+  return merged;
 }
 /* ===================== ORDEM DE EXIBICAO DAS MATERIAS =====================
    Devolve [{s, si}] em ordem alfabetica de nome, respeitando acento (pt-BR).
@@ -2745,9 +2781,11 @@ function questionOriginLabel(qid){
   return s.name + ' · Aula ' + s.aulas[loc.ai];
 }
 function getQState(qid){
-  if(!state.questions[qid]) state.questions[qid] = { attempts:0, correctCount:0, lastResult:null, dominated:false };
+  if(!state.questions[qid]) state.questions[qid] = { attempts:0, correctCount:0, lastResult:null, dominated:false, attemptsByDevice:{}, correctByDevice:{} };
   const r = state.questions[qid];
   if(r.dominated===undefined) r.dominated = false; // compat com backups antigos
+  if(!r.attemptsByDevice) r.attemptsByDevice = {}; // compat (ver migrateState/mergeIdsMigrado)
+  if(!r.correctByDevice) r.correctByDevice = {};
   return r;
 }
 function getSubjectStages(si){
@@ -2833,7 +2871,7 @@ function concluirEtapaExercicios(si, ai, silencioso){
   const rec = getAula(si, ai);
   if(!emEtapaExercicios(rec)) return false;
   const hoje = todayStr();
-  rec.reviewHistory.push({ d:hoje, q:'exercicios', stage:ETAPA_EXERCICIOS });
+  rec.reviewHistory.push({ id: uid(), d:hoje, q:'exercicios', stage:ETAPA_EXERCICIOS });
   if(rec.reviewHistory.length > 40) rec.reviewHistory = rec.reviewHistory.slice(-40);
   rec.lastReview = hoje;
   rec.stage = 1;
@@ -3121,6 +3159,30 @@ function migrateState(s){
     const jaTemProgresso = (s.sessions && s.sessions.length>0) || !!s.ciclo || Object.keys(s.aulas||{}).length>0;
     s.onboardingDone = jaTemProgresso;
   }
+  // 19/08/2026 (merge real de sincronizacao - ver "MERGE DE ESTADOS" mais abaixo): deviceId
+  // identifica este aparelho/instalacao - gerado uma vez, NUNCA sobrescrito por dados vindos
+  // da nuvem (syncApplyCloudRow preserva o valor local).
+  if(!s.deviceId) s.deviceId = uid();
+  if(!s.mergeIdsMigrado){
+    // Contadores de tentativas/acertos por aparelho: todo o historico de tentativas ja
+    // registrado antes desta migracao nao tem como saber em qual aparelho foi feito -
+    // atribuido de uma vez a ESTE aparelho (o que esta rodando a migracao agora) como base.
+    // Nao perde nenhum numero (o total continua certo), so nao separa retroativamente por
+    // aparelho se essa base for mesclada no futuro com um aparelho muito antigo que nunca
+    // rodou essa migracao.
+    Object.values(s.questions||{}).forEach(r=>{
+      if(!r.attemptsByDevice) r.attemptsByDevice = r.attempts ? { [s.deviceId]: r.attempts } : {};
+      if(!r.correctByDevice) r.correctByDevice = r.correctCount ? { [s.deviceId]: r.correctCount } : {};
+    });
+    // ids em pageEvents/answerLog/reviewHistory (nao existiam antes) - necessarios pra unir
+    // sem duplicar quando dois aparelhos tiverem o mesmo tipo de evento (ver mergeStates).
+    (s.pageEvents||[]).forEach(e=>{ if(!e.id) e.id = uid(); });
+    (s.answerLog||[]).forEach(a=>{ if(!a.id) a.id = uid(); });
+    Object.values(s.aulas||{}).forEach(r=>{
+      (r.reviewHistory||[]).forEach(h=>{ if(!h.id) h.id = uid(); });
+    });
+    s.mergeIdsMigrado = true;
+  }
   return s;
 }
 function load(){
@@ -3128,7 +3190,7 @@ function load(){
     const raw = localStorage.getItem(STORE_KEY);
     if(!raw) return defaultState();
     const parsed = JSON.parse(raw);
-    return migrateState(Object.assign(defaultState(), parsed));
+    return migrateState(mergeWithDefaults(parsed));
   }catch(e){ return defaultState(); }
 }
 function save(){
@@ -3219,7 +3281,7 @@ function setPagesRead(si, ai, newVal){
   // se voce corrigir uma pagina pra menos e depois pra mais nesse mesmo dia, o saldo do dia
   // agora fecha certo, em vez de contar as paginas "de volta" como se fossem novas.
   if(delta!==0){
-    state.pageEvents.push({ si, ai, d: todayStr(), delta, at: Date.now() });
+    state.pageEvents.push({ id: uid(), si, ai, d: todayStr(), delta, at: Date.now() });
   }
   if(newVal>=theory && !rec.studied){
     rec.studied = true;
@@ -7561,7 +7623,7 @@ function completeReview(si, ai, qualidade){
   const hoje = todayStr();
   const atrasoDias = rec.nextReview ? Math.max(0, diffDias(rec.nextReview, hoje)) : 0;
 
-  rec.reviewHistory.push({ d:hoje, q, stage:rec.stage, atraso:atrasoDias });
+  rec.reviewHistory.push({ id: uid(), d:hoje, q, stage:rec.stage, atraso:atrasoDias });
   if(rec.reviewHistory.length > 40) rec.reviewHistory = rec.reviewHistory.slice(-40);
   rec.dificuldade = q;      // ultima avaliacao, usada como etiqueta no repositorio
   rec.lastReview = hoje;
@@ -7581,7 +7643,7 @@ function completeReview(si, ai, qualidade){
 function registrarRevisaoAvulsa(si, ai, qualidade){
   const q = REVIEW_QUALITIES[qualidade] ? qualidade : 'medio';
   const rec = getAula(si,ai);
-  rec.reviewHistory.push({ d:todayStr(), q, stage:rec.stage, avulsa:true });
+  rec.reviewHistory.push({ id: uid(), d:todayStr(), q, stage:rec.stage, avulsa:true });
   if(rec.reviewHistory.length > 40) rec.reviewHistory = rec.reviewHistory.slice(-40);
   rec.dificuldade = q;
   save();
@@ -7981,7 +8043,7 @@ document.getElementById('fileImport').addEventListener('change', (e)=>{
   reader.onload = (evt)=>{
     try{
       const parsed = JSON.parse(evt.target.result);
-      state = migrateState(Object.assign(defaultState(), parsed));
+      state = migrateState(mergeWithDefaults(parsed));
       save();
       renderAll();
       toast("Backup importado com sucesso");
@@ -8232,15 +8294,17 @@ function syncRenderStatus(mode, extra){
   }
 }
 async function syncApplyCloudRow(row){
-  state = migrateState(Object.assign(defaultState(), row.data));
+  const deviceIdAntes = state.deviceId; // preserva a identidade DESTE aparelho (ver mergeStates)
+  state = migrateState(mergeWithDefaults(row.data));
+  if(deviceIdAntes) state.deviceId = deviceIdAntes;
+  if(typeof _metricasVersion==='number') _metricasVersion++; // invalida caches do Metricas (mesmo que save() faria)
   localStorage.setItem(STORE_KEY, JSON.stringify(state)); // grava local sem re-agendar push (evita loop)
   syncSetLastSyncedAt(row.updated_at);
   _syncLocalDirty = false; // este aparelho agora reflete exatamente o que a nuvem tinha
   renderAll();
 }
-// Resumo simples e legível do que cada lado tem, pra mostrar num conflito real. Não é
-// um diff campo a campo (isso exigiria mesclagem, ver comentário no topo da seção) - é
-// só o suficiente pra dar uma ideia de "qual lado parece ter mais coisa" e decidir.
+// Resumo simples e legível do que cada lado tem — usado só no toast pós-mesclagem
+// (ver mergeStates/syncHandleConflict logo abaixo), pra dar uma ideia do que veio de onde.
 function syncCountsSummary(s){
   s = s || {};
   return {
@@ -8254,32 +8318,141 @@ function syncCountsSummary(s){
 function syncFmtData(iso){
   try{ return new Date(iso).toLocaleString('pt-BR'); }catch(e){ return iso || 'desconhecido'; }
 }
-// Conflito real: este aparelho tem alteração não confirmada na nuvem E a nuvem também
-// mudou (por outro aparelho) depois da última vez que sincronizamos. Não decidimos
-// sozinhos - explicamos os dois lados e perguntamos. Nada é perdido de qualquer forma:
-// o lado descartado continua existindo (histórico no Supabase, ou os dados atuais deste
-// aparelho antes de aceitar a nuvem).
-async function syncHandleConflict(row){
+/* ===================== MERGE DE ESTADOS (sincronização) =====================
+   19/08/2026 (pedido do Bruno, "merge de verdade" - ver regras-sistema-horas.md seção 10).
+   Antes, um conflito real (os dois lados mudaram desde a última sincronização confirmada)
+   só podia ser resolvido escolhendo um lado INTEIRO — a sessão/página/questão respondida
+   no lado descartado sumia do app (continuava no histórico do Supabase, mas você tinha que
+   escolher). mergeStates() combina os dois lados sem perder nada nos dados que acontecem o
+   tempo todo (sessões, páginas, questões respondidas, revisões — o que alimenta streak,
+   heatmap e consistência). Configuração mais estrutural (ciclo, calendário, favoritos*,
+   dashboard, ajustes, provas, reportes) muda raramente e continua vindo do lado mais
+   recente por inteiro — mesclar isso campo a campo teria retorno baixo pro risco.
+   (*favorites, historicoCiclos e historicoSemanas acabaram entrando na mesclagem de
+   verdade também, de graça — já tinham id/chave própria, união sem risco.)
+
+   Como cada tipo de dado é mesclado:
+   - sessions, pageEvents, answerLog, reviewHistory (por aula), historicoCiclos,
+     historicoSemanas: UNIÃO por id (uid()) — cada evento existe uma vez só, não importa em
+     qual aparelho nasceu.
+   - pagesRead de cada aula: o maior entre (a) o que cada lado já tinha e (b) a soma dos
+     pageEvents mesclados marcados com aquela aula. Usar só a soma dos eventos não é seguro
+     porque os eventos migrados da era pré-repositório-único (pageActivity antigo, ver seção
+     9.4) não carregam si/ai — por isso o "maior dos três" nunca deixa o valor regredir.
+   - questions[qid].attempts/correctCount: contador POR APARELHO (attemptsByDevice/
+     correctByDevice, ver recordAnswer) — o total mesclado é a soma do MAIOR valor já visto
+     de cada aparelho (um contador por aparelho só cresce, então o maior de cada um somado
+     reconstrói o total certo sem contar nada duas vezes nem perder nada).
+   - questions[qid].dominated: OR (uma vez true, fica true).
+   - aulas[key].studied: OR (só vira true, nunca volta — toggleStudied foi removido em ago/2026).
+   - aulas[key].stage: MAX — o estágio da revisão espaçada só avança; revisar a MESMA
+     revisão pendente em dois aparelhos conta como UMA revisão concluída (o maior estágio já
+     alcançado), não duas.
+   - aulas[key].nextReview/mastered/lastReview/dificuldade: RECALCULADOS a partir do
+     reviewHistory e do stage já mesclados (scheduleNextReview) — nunca mesclados direto,
+     pra não ficar inconsistente com o stage escolhido.
+   - Tudo o mais: vem do lado com edição mais recente, por inteiro (ver "base" abaixo). */
+function _mergeArraysById(arrA, arrB){
+  const map = new Map();
+  (arrA||[]).forEach(x=>{ if(x && x.id!=null) map.set(x.id, x); });
+  (arrB||[]).forEach(x=>{ if(x && x.id!=null && !map.has(x.id)) map.set(x.id, x); });
+  return Array.from(map.values());
+}
+function _mergeDeviceCounter(a, b){
+  const out = Object.assign({}, a||{});
+  Object.entries(b||{}).forEach(([dev,val])=>{ out[dev] = Math.max(out[dev]||0, val||0); });
+  return out;
+}
+function mergeStates(localStateRaw, cloudStateRaw, cloudUpdatedAtIso){
+  // Os dois lados passam por migrateState/mergeWithDefaults ANTES de qualquer uniao por id.
+  // localStateRaw normalmente ja e o `state` em memoria (ja migrado - isso e um no-op seguro),
+  // mas cloudStateRaw (row.data, vindo direto do Supabase) pode ser uma linha salva por uma
+  // versao BEM mais antiga do app, sem ids em pageEvents/answerLog/reviewHistory nem
+  // deviceId/contadores por aparelho. Sem essa normalizacao aqui, entradas sem id do lado da
+  // nuvem seriam silenciosamente excluidas da uniao por _mergeArraysById (que exige x.id!=null)
+  // - dado real do outro aparelho se perderia na fusao em vez de ser preservado.
+  const localState = migrateState(mergeWithDefaults(JSON.parse(JSON.stringify(localStateRaw))));
+  const cloudState = migrateState(mergeWithDefaults(JSON.parse(JSON.stringify(cloudStateRaw))));
   const localEditIso = localStorage.getItem(SYNC_LOCAL_EDIT_KEY);
-  const cLocal = syncCountsSummary(state);
-  const cCloud = syncCountsSummary(row.data);
-  const localMaisRecente = localEditIso && new Date(localEditIso) > new Date(row.updated_at);
-  const msg =
-    'Conflito de sincronização: este aparelho e a nuvem mudaram de forma independente.\n\n' +
-    'ESTE APARELHO (alterado em ' + syncFmtData(localEditIso) + (localMaisRecente ? ' — mais recente' : '') + '):\n' +
-    '  Aulas: ' + cLocal.aulas + '  |  Sessões: ' + cLocal.sessoes + '  |  Respostas: ' + cLocal.respostas + '  |  Reportes: ' + cLocal.reportes + '\n\n' +
-    'NUVEM (alterada em ' + syncFmtData(row.updated_at) + (!localMaisRecente ? ' — mais recente' : '') + '):\n' +
-    '  Aulas: ' + cCloud.aulas + '  |  Sessões: ' + cCloud.sessoes + '  |  Respostas: ' + cCloud.respostas + '  |  Reportes: ' + cCloud.reportes + '\n\n' +
-    'Nada é apagado de qualquer forma (o lado que você não escolher fica registrado no histórico da nuvem).\n\n' +
-    'OK = manter os dados DESTE aparelho (sobrescreve a nuvem)\nCancelar = usar os dados da NUVEM (sobrescreve este aparelho)';
-  const manterLocal = confirm(msg);
-  if(manterLocal){
-    await syncPushCloud();
-    toast('Mantido o progresso deste aparelho — nuvem atualizada.');
-  } else {
-    await syncApplyCloudRow(row);
-    toast('Progresso da nuvem aplicado neste aparelho.');
-  }
+  const localMaisRecente = !cloudUpdatedAtIso || (localEditIso && new Date(localEditIso) >= new Date(cloudUpdatedAtIso));
+  const base = localMaisRecente ? localState : cloudState;
+  const merged = migrateState(mergeWithDefaults(JSON.parse(JSON.stringify(base))));
+
+  merged.deviceId = localState.deviceId; // NUNCA vem do outro lado - identifica ESTE aparelho
+
+  merged.sessions = _mergeArraysById(localState.sessions, cloudState.sessions);
+  merged.historicoCiclos = _mergeArraysById(localState.historicoCiclos, cloudState.historicoCiclos);
+  merged.historicoSemanas = _mergeArraysById(localState.historicoSemanas, cloudState.historicoSemanas);
+  merged.favorites = Object.assign({}, cloudState.favorites||{}, localState.favorites||{});
+
+  merged.pageEvents = _mergeArraysById(localState.pageEvents, cloudState.pageEvents);
+  const somaPorAula = {};
+  merged.pageEvents.forEach(e=>{
+    const k = key(e.si, e.ai);
+    somaPorAula[k] = (somaPorAula[k]||0) + (e.delta||0);
+  });
+
+  merged.answerLog = _mergeArraysById(localState.answerLog, cloudState.answerLog)
+    .filter(a=> a.d >= addDays(todayStr(), -120)); // mesmo corte de sempre (ver logAnswerForTrend), reaplicado apos unir
+
+  const qids = new Set([...Object.keys(localState.questions||{}), ...Object.keys(cloudState.questions||{})]);
+  merged.questions = {};
+  qids.forEach(qid=>{
+    const rl = (localState.questions||{})[qid], rc = (cloudState.questions||{})[qid];
+    const attemptsByDevice = _mergeDeviceCounter(rl && rl.attemptsByDevice, rc && rc.attemptsByDevice);
+    const correctByDevice = _mergeDeviceCounter(rl && rl.correctByDevice, rc && rc.correctByDevice);
+    merged.questions[qid] = {
+      attempts: Object.values(attemptsByDevice).reduce((a,b)=>a+b,0),
+      correctCount: Object.values(correctByDevice).reduce((a,b)=>a+b,0),
+      attemptsByDevice, correctByDevice,
+      dominated: !!((rl&&rl.dominated) || (rc&&rc.dominated)),
+      firstTryCorrect: (rl && rl.firstTryCorrect!==undefined) ? rl.firstTryCorrect : (rc && rc.firstTryCorrect),
+      lastResult: (rl && rl.lastResult) || (rc && rc.lastResult) || null,
+    };
+  });
+
+  const aulaKeys = new Set([...Object.keys(localState.aulas||{}), ...Object.keys(cloudState.aulas||{})]);
+  merged.aulas = {};
+  aulaKeys.forEach(k=>{
+    const rl = (localState.aulas||{})[k], rc = (cloudState.aulas||{})[k];
+    const partes = k.split('|'); const si = parseInt(partes[0],10), ai = parseInt(partes[1],10);
+    const reviewHistory = _mergeArraysById(rl&&rl.reviewHistory, rc&&rc.reviewHistory).sort((a,b)=> (a.d||'').localeCompare(b.d||''));
+    const rec = {
+      studied: !!((rl&&rl.studied) || (rc&&rc.studied)),
+      studiedDate: (rl&&rl.studiedDate && rc&&rc.studiedDate) ? (rl.studiedDate<rc.studiedDate?rl.studiedDate:rc.studiedDate) : ((rl&&rl.studiedDate)||(rc&&rc.studiedDate)||null),
+      stage: Math.max((rl&&rl.stage)||0, (rc&&rc.stage)||0),
+      mastered: false, nextReview: null, ease: 1, lastReview: null, dificuldade: null,
+      attempts: 0, correct: 0, // campos legados do rec, nunca usados (ver getAula) - mantidos so por forma
+      pagesRead: Math.max((rl&&rl.pagesRead)||0, (rc&&rc.pagesRead)||0, !isNaN(si) ? Math.min(theoryPages(si,ai), Math.max(0,somaPorAula[k]||0)) : 0),
+      reviewHistory: reviewHistory.length>40 ? reviewHistory.slice(-40) : reviewHistory,
+    };
+    const naoExercicios = reviewHistory.filter(h=> h.q!=='exercicios');
+    rec.dificuldade = naoExercicios.length ? naoExercicios[naoExercicios.length-1].q : ((rl&&rl.dificuldade)||(rc&&rc.dificuldade)||null);
+    rec.lastReview = reviewHistory.length ? reviewHistory[reviewHistory.length-1].d
+      : (((rl&&rl.lastReview)||'') > ((rc&&rc.lastReview)||'') ? rl.lastReview : ((rc&&rc.lastReview)||(rl&&rl.lastReview)||null));
+    if(rec.studied && !isNaN(si)) scheduleNextReview(rec, si); // recalcula nextReview/mastered a partir do stage/lastReview ja mesclados
+    merged.aulas[k] = rec;
+  });
+
+  merged.mergeIdsMigrado = true;
+  return merged;
+}
+// Conflito real: este aparelho tem alteração não confirmada na nuvem E a nuvem também
+// mudou (por outro aparelho) depois da última vez que sincronizamos. Antes pedíamos pra
+// você escolher um lado inteiro (ver histórico do commit); agora mesclamos de verdade
+// (ver mergeStates acima) e não perguntamos mais — não há mais "lado descartado" pros
+// dados que realmente importam (sessões, páginas, questões, revisões).
+async function syncHandleConflict(row){
+  const cLocalAntes = syncCountsSummary(state);
+  const merged = mergeStates(state, row.data, row.updated_at);
+  state = merged;
+  if(typeof _metricasVersion==='number') _metricasVersion++; // invalida caches do Metricas (mesmo que save() faria)
+  localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  await syncPushCloud();
+  renderAll();
+  const cDepois = syncCountsSummary(state);
+  const ganhoSessoes = cDepois.sessoes - cLocalAntes.sessoes;
+  toast('Progresso mesclado' + (ganhoSessoes>0 ? ' — ' + ganhoSessoes + ' sessão(ões) trazida(s) de outro aparelho' : '') + '.');
 }
 async function syncRun(){
   if(!syncEnabled()){ syncRenderStatus('unlinked'); return; }
@@ -9048,6 +9221,12 @@ function recordAnswer(qid, correct){
   if(r.attempts===0) r.firstTryCorrect = correct; // "Taxa na 1ª Tentativa": só a primeira vale
   r.attempts++;
   if(correct) r.correctCount++;
+  // Contador POR APARELHO (ver mergeStates, "MERGE DE ESTADOS"): permite mesclar tentativas
+  // feitas em dois aparelhos diferentes sem perder nenhuma - cada aparelho só incrementa o
+  // próprio contador, nunca decresce, então juntar é somar o maior valor já visto de cada um.
+  const dev = state.deviceId;
+  r.attemptsByDevice[dev] = (r.attemptsByDevice[dev]||0) + 1;
+  if(correct) r.correctByDevice[dev] = (r.correctByDevice[dev]||0) + 1;
   r.lastResult = correct? 'correct':'wrong';
   if(correct) r.dominated = true; // monotônico: uma vez dominada, nunca volta a pendente
   noteQuestionAnsweredInActiveSession(qid); // vincula à sessão de estudo (tipo=questoes) ativa, se houver
@@ -9065,7 +9244,7 @@ function logAnswerForTrend(qid, correct){
   const si = qidSubjectMap()[qid];
   if(si==null) return;
   if(!state.answerLog) state.answerLog = [];
-  state.answerLog.push({ qid, si, correct: !!correct, d: todayStr() });
+  state.answerLog.push({ id: uid(), qid, si, correct: !!correct, d: todayStr() });
   const corte = addDays(todayStr(), -120);
   if(state.answerLog.length % 50 === 0){ // custa pouco, não precisa filtrar a cada resposta
     state.answerLog = state.answerLog.filter(a=> a.d>=corte);
