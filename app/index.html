@@ -2688,7 +2688,7 @@ async function abrirApostilaWeb(si, ai){
 
 /* ===================== ESTADO ===================== */
 function defaultState(){
-  return { aulas:{}, dailyGoal:15, activity:{}, questions:{}, pageActivity:{}, subjectStages:{},
+  return { aulas:{}, dailyGoal:15, questions:{}, pageEvents:[], pageEventsMigrado:true, subjectStages:{},
     sessions:[], activeSession:null, subjectWeights:{}, dashboard:null, ciclo:null,
     settings:{ theme:'dark', accent:'apostila', pomodoro:{ focusMin:30, breakMin:10 } }, metaDataAlvo:null, answerLog:[], historicoCiclos:[],
     favorites:{}, onboardingDone:false, onboarding:null,
@@ -3021,31 +3021,33 @@ function migrateState(s){
   Object.values(s.questions||{}).forEach(r=>{
     if(r.dominated===undefined) r.dominated = (r.lastResult==='correct');
   });
-  if(!s.pageActivity) s.pageActivity = {};
-  if(!s.activity) s.activity = {};
-  // ago/2026 (bug reportado pelo Bruno): todayStr() usava toISOString() (UTC), nao a data
-  // LOCAL do usuario. No fuso de Brasilia (UTC-3), qualquer uso do app entre ~21h e meia-noite
-  // local ja "virava o dia" em UTC - entao paginas lidas depois desse horario eram somadas na
-  // chave de AMANHA em vez de hoje, e a Meta diaria ("Hoje: X/Y paginas") passava a mostrar so
-  // uma fatia do dia real (o resto ficava "escondido" numa chave de data que ainda nao chegou).
-  // todayStr() ja foi corrigido pra usar data local (ver definicao da funcao). Esta migracao roda
-  // uma vez por carregamento e conserta o rastro que o bug antigo pode ter deixado: qualquer
-  // chave de pageActivity/activity com data ESTRITAMENTE DEPOIS de hoje (data local correta) so
-  // pode ter nascido desse bug - ninguem "le pagina no futuro" - entao e mesclada de volta pro
-  // dia de hoje e a chave fantasma e removida. Nao mexe em datas passadas (nao da pra distinguir
-  // com seguranca, sem replay sessao-a-sessao, uma chave passada afetada de uma legitima).
-  (function corrigirChavesFuturasDoFusoHorario(){
+  if(!Array.isArray(s.pageEvents)) s.pageEvents = [];
+  /* Migracao unica (19/08/2026 - proposta do Bruno, "repositorio unico de metricas", ver
+     regras-sistema-horas.md secao 10): pageActivity/activity eram MAPAS INCREMENTAIS (dia -> total),
+     escritos por soma (+=) a cada acao. Esse desenho - contador que soma deltas, em vez de dado
+     bruto recalculado do zero - foi a causa raiz do bug de duplicacao de paginas de 19/08 (secao
+     9.4): um clique acidental resetava e re-setava rec.pagesRead no mesmo dia, e cada re-set virava
+     um "+delta" novo, mesmo sem ter sido lida nenhuma pagina de verdade a mais. A partir de agora,
+     "paginas lidas no dia" e "dia teve atividade" (streak, calendario) NUNCA sao guardados prontos -
+     sao sempre CALCULADOS na hora a partir de dado bruto (sessions, pageEvents, answerLog,
+     reviewHistory, provas historico), com cache invalidado a cada save() - ver objeto Metricas mais
+     abaixo. Aqui so convertemos o rastro antigo (se existir) pra um evento por dia, uma vez, e
+     apagamos os mapas antigos - dado velho preservado dentro de pageEvents, nao perdido. Tambem
+     aproveita pra corrigir o mesmo bug de fuso horario que essa migracao ja tratava antes (chave de
+     data ESTRITAMENTE DEPOIS de hoje so pode ter nascido do bug de UTC ja corrigido - ninguem "le
+     pagina no futuro" - entao vira um evento de hoje). */
+  if(s.pageActivity && !s.pageEventsMigrado){
     const hoje = todayStr();
-    [s.pageActivity, s.activity].forEach(mapa=>{
-      Object.keys(mapa).forEach(k=>{
-        if(k>hoje){
-          if(mapa===s.pageActivity) mapa[hoje] = (mapa[hoje]||0) + mapa[k];
-          else if(mapa[k]) mapa[hoje] = true;
-          delete mapa[k];
-        }
-      });
+    Object.keys(s.pageActivity).forEach(d=>{
+      const v = s.pageActivity[d];
+      if(v){
+        s.pageEvents.push({ d: (d>hoje ? hoje : d), delta: v, at: Date.now(), migrado:true });
+      }
     });
-  })();
+  }
+  delete s.pageActivity;
+  delete s.activity;
+  s.pageEventsMigrado = true;
   if(!s.subjectStages) s.subjectStages = {};
   if(!s.dailyGoal || s.dailyGoal<1) s.dailyGoal = 15; // metas antigas eram em "aulas/dia" (1-20); reinicia em paginas/dia
   if(!s.sessions) s.sessions = [];
@@ -3131,6 +3133,7 @@ function load(){
   }catch(e){ return defaultState(); }
 }
 function save(){
+  if(typeof _metricasVersion==='number') _metricasVersion++; // invalida os caches derivados do Metricas (ver secao METRICAS)
   localStorage.setItem(STORE_KEY, JSON.stringify(state));
   // Espelha automaticamente num arquivo real na pasta de instalação, via o
   // servidor local (ver secao "ARQUIVO LOCAL" mais abaixo). Só tentamos esse
@@ -3180,7 +3183,9 @@ function getAula(si,ai){
   if(!Array.isArray(r.reviewHistory)) r.reviewHistory = [];
   return r;
 }
-function markActivity(){ state.activity[todayStr()] = true; }
+// markActivity() foi removida em 19/08/2026 - "dia teve atividade" agora e sempre derivado
+// (ver objeto Metricas, logo apos a secao de paginas), nunca marcado manualmente num mapa a
+// parte. Ver comentario da migracao de pageEvents, acima, pro contexto completo.
 
 /* ===================== PÁGINAS / LEITURA ===================== */
 function theoryPages(si,ai){ return pagesInfo(si,ai).theory || 1; }
@@ -3209,10 +3214,13 @@ function setPagesRead(si, ai, newVal){
   const rec = getAula(si,ai);
   const delta = newVal - (rec.pagesRead||0);
   rec.pagesRead = newVal;
-  if(delta>0){
-    const d = todayStr();
-    state.pageActivity[d] = (state.pageActivity[d]||0) + delta;
-    markActivity();
+  // Todo delta real (positivo OU negativo) vira um evento datado - "paginas lidas no dia" e
+  // sempre a SOMA desses eventos (ver Metricas.paginasNoDia), nunca um contador incrementado
+  // à parte. Isso corrige de raiz uma assimetria que existia antes (so delta>0 era registrado):
+  // se voce corrigir uma pagina pra menos e depois pra mais nesse mesmo dia, o saldo do dia
+  // agora fecha certo, em vez de contar as paginas "de volta" como se fossem novas.
+  if(delta!==0){
+    state.pageEvents.push({ si, ai, d: todayStr(), delta, at: Date.now() });
   }
   if(newVal>=theory && !rec.studied){
     rec.studied = true;
@@ -3241,7 +3249,96 @@ function avisoTeoriaConcluida(si, ai, rec){
   }
   toast("Teoria concluída Próximo passo: fazer as "+banco.length+" questões desta apostila até "+fmtDate(rec.nextReview)+" (48h)");
 }
-function pagesReadToday(){ return state.pageActivity[todayStr()] || 0; }
+function pagesReadToday(){ return Metricas.paginasHoje(); }
+
+/* ===================== METRICAS (repositorio unico de numeros) =====================
+   Pedido do Bruno em 19/08/2026 (ver regras-sistema-horas.md secao 10): "todos os numeros
+   devem sair do mesmo local... para nao acontecerem divergencias". Esse objeto e o UNICO
+   lugar do app que sabe calcular "quanto foi feito" (paginas, tempo, questoes, revisoes,
+   se um dia teve atividade, streak). Nenhuma tela deve ler state.pageEvents/state.sessions/
+   state.answerLog/reviewHistory/state.provas direto pra montar uma metrica de "quanto" -
+   sempre por aqui, e sempre a MESMA funcao nos dois lugares que mostram o mesmo numero.
+
+   Tudo aqui e DERIVADO (recalculado do dado bruto, nunca guardado pronto) - isso e o que
+   impede a classe de bug de 19/08 (contador que soma incrementos e diverge quando uma acao
+   e desfeita/refeita). O preco de ser derivado (mais caro de calcular) e resolvido com um
+   cache simples invalidado a cada save() (ver _metricasVersion) - o cache e so uma otimizacao
+   de leitura, nunca a fonte do dado. */
+let _metricasVersion = 0; // bumped em save() - qualquer leitura cacheada abaixo se invalida sozinha
+let _metricasDiasCache = null, _metricasDiasCacheV = -1;
+let _metricasPaginasCache = null, _metricasPaginasCacheV = -1;
+// Mapa dia -> total de paginas naquele dia (soma de todos os deltas de pageEvents daquele dia).
+function _paginasPorDiaMap(){
+  if(_metricasPaginasCache && _metricasPaginasCacheV===_metricasVersion) return _metricasPaginasCache;
+  const map = {};
+  (state.pageEvents||[]).forEach(e=>{ map[e.d] = (map[e.d]||0) + e.delta; });
+  _metricasPaginasCache = map;
+  _metricasPaginasCacheV = _metricasVersion;
+  return map;
+}
+// Set de todos os dias (iso) que tiveram QUALQUER atividade real - sessao concluida, pagina
+// lida, questao respondida, revisao (exercicios/revisao/avulsa) ou simulado de prova. Usado
+// pro streak e pro calendario mensal. Um cronometro iniciado e nunca terminado, sem nenhuma
+// outra atividade naquele dia, NAO conta (decisao do Bruno, 19/08/2026) - so o que de fato
+// aconteceu e registrado em algum lugar entra aqui.
+function _diasComAtividadeSet(){
+  if(_metricasDiasCache && _metricasDiasCacheV===_metricasVersion) return _metricasDiasCache;
+  const set = new Set();
+  state.sessions.forEach(s=> set.add(dataLocalDe(s.timestampFim)));
+  Object.keys(_paginasPorDiaMap()).forEach(d=>{ if(_paginasPorDiaMap()[d]>0) set.add(d); });
+  (state.answerLog||[]).forEach(a=> set.add(a.d));
+  Object.values(state.aulas||{}).forEach(rec=> (rec.reviewHistory||[]).forEach(h=> set.add(h.d)));
+  Object.values(state.provas||{}).forEach(p=> (p.historico||[]).forEach(h=> set.add(h.d)));
+  _metricasDiasCache = set;
+  _metricasDiasCacheV = _metricasVersion;
+  return set;
+}
+const Metricas = {
+  // ---- PAGINAS ----
+  paginasNoDia(iso){ return _paginasPorDiaMap()[iso] || 0; },
+  paginasHoje(){ return this.paginasNoDia(todayStr()); },
+  paginasNaJanela(diasJanela){
+    const hoje = todayStr();
+    let soma = 0;
+    for(let i=0;i<diasJanela;i++) soma += this.paginasNoDia(addDays(hoje,-i));
+    return soma;
+  },
+  // ---- TEMPO (sessions ja e fonte solida - so centraliza o acesso) ----
+  sessoesNoDia(iso){ return state.sessions.filter(s=> dataLocalDe(s.timestampFim)===iso); },
+  tempoNoDia(iso){ return sumTempo(this.sessoesNoDia(iso)); },
+  // ---- QUESTOES ----
+  questoesNoDia(iso){ return (state.answerLog||[]).filter(a=> a.d===iso).length; },
+  // ---- ATIVIDADE / STREAK ----
+  diaTemAtividade(iso){ return _diasComAtividadeSet().has(iso); },
+  streakAtual(){
+    const dias = _diasComAtividadeSet();
+    let d = todayStr(), n = 0;
+    while(dias.has(d)){ n++; d = addDays(d,-1); }
+    return n;
+  },
+  // ---- ESTATISTICAS AGREGADAS DE UM DIA (tooltip do calendario mensal) ----
+  estatisticasDoDia(iso){
+    const sessoesDoDia = this.sessoesNoDia(iso);
+    const questoes = sessoesDoDia.reduce((sum,s)=> sum + (s.tipo==='questoes'? questoesRespondidasNaSessao(s) : 0), 0);
+    return { segundos: sumTempo(sessoesDoDia), questoes, paginas: this.paginasNoDia(iso) };
+  },
+  // ---- RITMO (usa a mesma janela "menor entre janela pedida e dias reais desde o inicio
+  //      do planejamento" que ja existia - ver diasDesdeInicioPlanejamento) ----
+  ritmoPaginasDia(diasJanela){
+    diasJanela = diasJanela>0 ? diasJanela : 30;
+    const diasReais = diasDesdeInicioPlanejamento();
+    const divisor = diasReais!=null ? Math.min(diasJanela, diasReais) : diasJanela;
+    return this.paginasNaJanela(divisor)/divisor;
+  },
+  ritmoQuestoesDia(diasJanela){
+    diasJanela = diasJanela>0 ? diasJanela : 30;
+    const diasReais = diasDesdeInicioPlanejamento();
+    const divisor = diasReais!=null ? Math.min(diasJanela, diasReais) : diasJanela;
+    const corte = addDays(todayStr(), -(divisor-1));
+    const qtd = (state.answerLog||[]).filter(a=> a.d>=corte).length;
+    return qtd/divisor;
+  },
+};
 
 /* ===================== SESSÕES DE ESTUDO / CRONÔMETRO ===================== */
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
@@ -3262,7 +3359,10 @@ function startSession(si, ai, tipo){
     modo: 'pomodoro', // sessão padrão: Pomodoro (30min foco + 10min intervalo, configurável em Ajustes)
   };
   sessionOverlayMinimized = false; // toda sessão nova abre na tela central, não minimizada
-  markActivity();
+  // 19/08/2026 (decisao do Bruno): antes, o dia era marcado "estudado" ja no INICIO do
+  // cronometro, mesmo que a sessao fosse abandonada sem terminar. Agora "dia teve atividade"
+  // e derivado (Metricas.diaTemAtividade) so a partir do que de fato aconteceu - uma sessao
+  // abandonada sem nenhuma pagina/questao/revisao naquele dia deixa de contar, de proposito.
   save();
   return true;
 }
@@ -3350,7 +3450,6 @@ function endActiveSession(extra){
   // bloco ou nao) e credita, em ordem, os blocos pendentes da materia com o tempo estudado
   // na semana inteira - ver comentario da funcao pra regra completa.
   activeSessionCalendarRef = null;
-  markActivity();
   save();
   sincronizarBlocosSemana();
   checkCicloCompletion();
@@ -3379,7 +3478,6 @@ function addManualSession(si, ai, tipo, minutos, extra){
     sessao.questoesManual = { count: extra.questoesCount||0, correct: extra.questoesCorrect||0 };
   }
   state.sessions.push(sessao);
-  markActivity();
   save();
   sincronizarBlocosSemana(); // lancamento manual tambem credita blocos pendentes da semana - ver comentario da funcao
   checkCicloCompletion();
@@ -5332,13 +5430,7 @@ function dueReviews(){
   return list;
 }
 function currentStreak(){
-  let d = todayStr();
-  let n = 0;
-  while(state.activity[d]){
-    n++;
-    d = addDays(d,-1);
-  }
-  return n;
+  return Metricas.streakAtual();
 }
 
 /* ===================== DASHBOARD CUSTOMIZÁVEL (PAINEL) ===================== */
@@ -6762,11 +6854,14 @@ function renderAulasDaMateria(siAlvo, filter){
       // ago/2026 (bug reportado pelo Bruno): esse marcador ERA clicavel e chamava toggleStudied(),
       // que ao desmarcar zerava rec.pagesRead, rec.stage, rec.mastered, rec.nextReview, rec.ease
       // e rec.reviewHistory - e ao marcar de novo, setPagesRead(...,theory) recontava as paginas
-      // como "novas" em state.pageActivity[hoje], duplicando o total do dia. Ou seja, um clique
-      // duplo (sem querer) apagava o historico de revisao espacada da aula E inflava a contagem
-      // de paginas lidas de hoje. Agora o marcador e so-leitura: reflete rec.studied (Teoria
-      // 100% lida), que so muda automaticamente via setPagesRead atingindo o total de paginas -
-      // nao ha mais nenhum jeito de mexer nele na mao.
+      // como "novas" em state.pageActivity[hoje] (mapa incremental antigo), duplicando o total
+      // do dia. Ou seja, um clique duplo (sem querer) apagava o historico de revisao espacada da
+      // aula E inflava a contagem de paginas lidas de hoje. Agora o marcador e so-leitura: reflete
+      // rec.studied (Teoria 100% lida), que so muda automaticamente via setPagesRead atingindo o
+      // total de paginas - nao ha mais nenhum jeito de mexer nele na mao. Alem disso (19/08/2026),
+      // o mapa incremental pageActivity foi substituido por um log de eventos (state.pageEvents) -
+      // ver secao METRICAS - entao mesmo uma futura re-execucao acidental de setPagesRead vira um
+      // evento auditavel, nao um "+=" cego que pode divergir.
       const pageInput = row.querySelector('.page-input');
       pageInput.addEventListener('click', e=> e.stopPropagation());
       pageInput.addEventListener('change', (e)=>{
@@ -7394,7 +7489,6 @@ function completeReview(si, ai, qualidade){
   } else {
     toast("Revisão feita ("+REVIEW_QUALITIES[q].label+") <svg class=ic-svg aria-hidden=true><use href=#ic-check></use></svg> Próxima em "+fmtDate(rec.nextReview));
   }
-  markActivity();
   save();
 }
 // Revisao avulsa, disparada pelo repositorio: registra a avaliacao e a data, mas NAO avanca
@@ -7406,7 +7500,6 @@ function registrarRevisaoAvulsa(si, ai, qualidade){
   rec.reviewHistory.push({ d:todayStr(), q, stage:rec.stage, avulsa:true });
   if(rec.reviewHistory.length > 40) rec.reviewHistory = rec.reviewHistory.slice(-40);
   rec.dificuldade = q;
-  markActivity();
   save();
   toast("Revisão avulsa registrada ("+REVIEW_QUALITIES[q].label+") — cronograma mantido");
 }
@@ -7417,8 +7510,9 @@ function registrarRevisaoAvulsa(si, ai, qualidade){
 // isso representa no ritmo atual do usuario — serve de termometro pra saber se a velocidade
 // de leitura/resolucao atual eh suficiente pra terminar no prazo.
 // Ritmo ATUAL (páginas/dia e questões/dia), vindo do histórico real de sessões — não
-// muda quando o usuário replaneja a data alvo, porque lê state.pageActivity/answerLog
-// diretamente, e replanejar só grava state.metaDataAlvo (ver listener de #metaDataAlvo).
+// muda quando o usuário replaneja a data alvo, porque lê via Metricas (repositório único
+// de métricas, ver definição perto de pagesReadToday) diretamente, e replanejar só grava
+// state.metaDataAlvo (ver listener de #metaDataAlvo).
 // Janela de 30 dias corridos (não só dias com atividade): reflete frequência real, não
 // só o quanto rendeu nos dias em que abriu o app.
 // Data de início do PLANEJAMENTO (ago/2026, pedido do Bruno): usamos a data em que o Ciclo
@@ -7445,21 +7539,10 @@ function diasDesdeInicioPlanejamento(){
 // continua contando dias sem atividade DENTRO da janela real (não vira "média só dos dias que
 // estudei"), só não pune por dias em que o plano nem existia ainda.
 function ritmoAtualPaginasDia(diasJanela){
-  diasJanela = diasJanela>0 ? diasJanela : 30;
-  const diasReais = diasDesdeInicioPlanejamento();
-  const divisor = diasReais!=null ? Math.min(diasJanela, diasReais) : diasJanela;
-  const hoje = todayStr();
-  let soma = 0;
-  for(let i=0;i<divisor;i++){ soma += state.pageActivity[addDays(hoje,-i)] || 0; }
-  return soma/divisor;
+  return Metricas.ritmoPaginasDia(diasJanela);
 }
 function ritmoAtualQuestoesDia(diasJanela){
-  diasJanela = diasJanela>0 ? diasJanela : 30;
-  const diasReais = diasDesdeInicioPlanejamento();
-  const divisor = diasReais!=null ? Math.min(diasJanela, diasReais) : diasJanela;
-  const corte = addDays(todayStr(), -(divisor-1));
-  const qtd = (state.answerLog||[]).filter(a=> a.d>=corte).length;
-  return qtd/divisor;
+  return Metricas.ritmoQuestoesDia(diasJanela);
 }
 function metaDataAlvoCalc(dataAlvo){
   if(!dataAlvo) return null;
@@ -7575,15 +7658,10 @@ const MESES_LABEL = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julh
 // Soma, pra UM dia (iso local, ver dataLocalDe), o tempo estudado, questoes respondidas e
 // paginas lidas nesse dia - usado no tooltip do Calendario de estudos (ago/2026, pedido do
 // Bruno: "ao passar o mouse deve aparecer quantas horas, quantas questoes, quantas paginas").
-// Paginas usa state.pageActivity (ja acumulado por dia local, ver setPagesRead) em vez de somar
-// sessao a sessao, porque uma sessao de teoria nao guarda "quantas paginas novas" - so o
-// intervalo [inicio,fim] lido NAQUELA sessao, que pode se sobrepor a progresso de outro dia.
+// 19/08/2026: delega pro repositorio unico de metricas (Metricas.estatisticasDoDia) em vez de
+// calcular aqui - mesma logica de sempre (pageEvents em vez de pageActivity), so centralizada.
 function estatisticasDoDia(iso){
-  const sessoesDoDia = state.sessions.filter(s=> dataLocalDe(s.timestampFim)===iso);
-  const segundos = sumTempo(sessoesDoDia);
-  const questoes = sessoesDoDia.reduce((sum,s)=> sum + (s.tipo==='questoes'? questoesRespondidasNaSessao(s) : 0), 0);
-  const paginas = state.pageActivity[iso] || 0;
-  return { segundos, questoes, paginas };
+  return Metricas.estatisticasDoDia(iso);
 }
 function buildMesCalendarioHtml(ano, mes, deStr, ateStr){ // mes: 0-11
   const diasNoMes = new Date(ano, mes+1, 0).getDate();
@@ -7594,7 +7672,7 @@ function buildMesCalendarioHtml(ano, mes, deStr, ateStr){ // mes: 0-11
   for(let dia=1; dia<=diasNoMes; dia++){
     const iso = `${ano}-${String(mes+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
     const dentroRange = (!deStr || iso>=deStr) && (!ateStr || iso<=ateStr);
-    const estudou = !!state.activity[iso];
+    const estudou = Metricas.diaTemAtividade(iso);
     const cls = 'd'+(dentroRange?'':' fora')+(estudou?' on':'')+(iso===hojeIso?' today':'');
     let titulo = fmtDate(iso);
     if(estudou){
@@ -8337,7 +8415,7 @@ function salvarResultadoProva(id, respostas, segundos){
   if(atual) hist.push({ d:atual.d, acertos:atual.acertos, total:atual.total });
   res.historico = hist;
   provasState()[id] = res;
-  markActivity(); save();
+  save();
   return res;
 }
 function limparResultadoProva(id){ delete provasState()[id]; save(); }
@@ -8864,7 +8942,6 @@ function recordAnswer(qid, correct){
   if(correct) r.dominated = true; // monotônico: uma vez dominada, nunca volta a pendente
   noteQuestionAnsweredInActiveSession(qid); // vincula à sessão de estudo (tipo=questoes) ativa, se houver
   logAnswerForTrend(qid, correct);
-  markActivity();
   save();
   // Se essa foi a última questão pendente de uma aula que está na etapa de exercícios,
   // a etapa fecha sozinha aqui e a 1ª revisão já entra na agenda (ver ETAPA_EXERCICIOS).
