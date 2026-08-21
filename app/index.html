@@ -4427,7 +4427,13 @@ function segundaFeiraDe(dataStr){
 // regeneracao automatica (unica, sem botao) na proxima visita, mesmo sem virar a segunda.
 // v4 (ago/2026): geracao deixou de olhar deficit acumulado (ver ATRASOS) - semanas geradas
 // pela v3 podiam ter blocos "encolhidos" por causa do teto do deficit, que nao existe mais.
-const CALENDARIO_ALGO_VERSION = 4;
+// v5 (ago/2026, bug reportado pelo Bruno): a v4 usava distribuirInteiros puro pra dividir a
+// semana por peso - com pesos muito desiguais (materia quase concluida com peso sugerido tipo
+// 0,1 ao lado de outras com peso 8+), a cota de uma materia podia arredondar pra 0 unidades e
+// ela sumia da semana inteira, mesmo tendo peso>0. distribuirComPiso garante um minimo de 30min
+// por materia com peso>0 (ver comentario dela) - nao tem nenhuma relacao com atraso/divida, que
+// continua 100% separado (secao "Atrasadas").
+const CALENDARIO_ALGO_VERSION = 5;
 function ensureCalendarioDefaults(){
   if(!state.calendario) state.calendario = { semanaRef:null, blocos:{}, diasPeso:null, algoVersion:null };
   const c = state.calendario;
@@ -4457,6 +4463,34 @@ function distribuirInteiros(pesos, total){
   chaves.sort((a,b)=> info[b].frac - info[a].frac);
   for(let i=0; i<resto; i++) info[chaves[i % chaves.length]].inteiro++;
   chaves.forEach(k=> out[k]=info[k].inteiro);
+  return out;
+}
+// ago/2026 (bug reportado pelo Bruno): distribuirInteiros puro, com pesos muito desiguais (ex.:
+// matéria quase concluída com peso sugerido 0,1 convivendo com outras de peso 8+), podia arredondar
+// a cota de uma matéria pra 0 unidades inteiras - ela simplesmente sumia do Calendário da Semana a
+// semana inteira, mesmo tendo peso>0 e ainda precisando de tempo. distribuirComPiso garante um
+// PISO mínimo (pisoUnid, em unidades de 15min) pra cada matéria com peso>0 antes de distribuir o
+// resto proporcionalmente - mesmo espírito do piso de 30min de cicloMetaSegundos/arredondar15min,
+// só que aplicado à distribuição da semana, não só ao cálculo da meta. Isso é só sobre a matemática
+// da distribuição por peso - não tem nenhuma relação com atraso/dívida (ver ATRASOS acima), que
+// continua inteiramente separado, na sua própria seção "Atrasadas".
+function distribuirComPiso(pesos, pisoUnid, total){
+  const chaves = Object.keys(pesos).filter(k=>pesos[k]>0);
+  const out = {};
+  if(chaves.length===0 || total<=0){ chaves.forEach(k=>out[k]=0); return out; }
+  const somaPisos = chaves.length*pisoUnid;
+  if(total<somaPisos){
+    // orçamento não dá nem pro piso de todo mundo (poucas horas/semana pra muitas matérias
+    // ativas) - melhor esforço, cai pra proporcional puro (mesmo risco de sumiço, mas não tem
+    // como garantir um mínimo pra todos sem estourar o total configurado).
+    return distribuirInteiros(pesos, total);
+  }
+  chaves.forEach(k=> out[k]=pisoUnid);
+  const restante = total-somaPisos;
+  if(restante>0){
+    const extra = distribuirInteiros(pesos, restante);
+    chaves.forEach(k=> out[k]+=(extra[k]||0));
+  }
   return out;
 }
 // Converte os minutos totais que uma matéria recebeu na semana numa lista de ITENS pra
@@ -4505,8 +4539,12 @@ function intercalarItensPorMateria(itensPorMateria){
   }
   return out;
 }
-// Gera (ou regenera, se forcar=true) o conteúdo da semana atual a partir do déficit vivo
-// de cada matéria no ciclo. Ver comentário da seção acima pra lógica completa.
+// Piso mínimo garantido por matéria na distribuição da semana - 2 unidades de 15min = 30min,
+// o mesmo bloco mínimo que decomporMateriaEmItens já exige pra não descartar a matéria inteira
+// (ver distribuirComPiso acima).
+const PISO_SEMANA_UNID15 = 2;
+// Gera (ou regenera, se forcar=true) o conteúdo da semana atual, sempre proporcional ao peso
+// de cada matéria ativa no ciclo. Ver comentário da seção acima pra lógica completa.
 function gerarSemanaCalendario(forcar){
   const c = ensureCalendarioDefaults();
   const segunda = segundaFeiraDe(todayStr());
@@ -4529,7 +4567,7 @@ function gerarSemanaCalendario(forcar){
     save();
     return;
   }
-  const unid15PorMateria = distribuirInteiros(baseMaterias, totalUnid15);
+  const unid15PorMateria = distribuirComPiso(baseMaterias, PISO_SEMANA_UNID15, totalUnid15);
   const itensPorMateria = {};
   Object.keys(unid15PorMateria).forEach(siStr=>{
     const minutosMateria = unid15PorMateria[siStr]*15;
