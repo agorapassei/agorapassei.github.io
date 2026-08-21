@@ -1715,6 +1715,14 @@
 
   /* Aba Planejamento (Ciclo de Estudos) */
   .ciclo-actions{display:flex; gap:8px; margin-bottom:14px;}
+  /* Ciclo (roscas) e Atrasadas lado a lado, metade da largura cada (pedido do Bruno,
+     ago/2026) - os dois .card viram filhos diretos deste grid, sem precisar de classe extra
+     neles. Empilha em 1 coluna abaixo de 720px pra não espremer as roscas. */
+  .ciclo-side-row{display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:stretch;}
+  .ciclo-side-row > .card{margin:0;}
+  @media (max-width:720px){
+    .ciclo-side-row{grid-template-columns:1fr;}
+  }
   .ciclo-actions .btn{flex:1; font-size:.76rem; padding:10px 6px;}
   .ciclo-stats-row{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
   .ciclo-stat h2{font-size:.78rem; color:var(--text-mut); font-weight:700; margin:0 0 8px;}
@@ -2228,22 +2236,30 @@
           <div class="bar" style="margin-top:8px;"><i id="cicloStatProgressoBar" style="width:0%"></i></div>
         </div>
       </div>
-      <div class="card">
-        <h2>Ciclo</h2>
-        <!-- Segunda rosca "Restante" (ago/2026, pedido do Bruno): ao lado da rosca de sempre
-             (total planejado da semana, fatiado por materia), uma segunda rosca com o que
-             ainda falta estudar de cada materia - ver buildCicloDonutRestanteHtml. -->
-        <div class="ciclo-donuts-row" style="display:flex; gap:18px; align-items:flex-start; justify-content:center; flex-wrap:wrap;">
-          <div style="text-align:center;">
-            <div id="cicloDonutWrap"></div>
-            <div style="font-size:.72rem; color:var(--text-mut); margin-top:4px; font-weight:700;">Total planejado</div>
+      <!-- ago/2026 (pedido do Bruno): rosca do Ciclo e "Atrasadas" lado a lado, cada uma com
+           metade da largura - ver .ciclo-side-row no CSS. Em telas estreitas empilha (1 coluna). -->
+      <div class="ciclo-side-row">
+        <div class="card">
+          <h2>Ciclo</h2>
+          <!-- Segunda rosca "Restante" (ago/2026, pedido do Bruno): ao lado da rosca de sempre
+               (total planejado da semana, fatiado por materia), uma segunda rosca com o que
+               ainda falta estudar de cada materia - ver buildCicloDonutRestanteHtml. -->
+          <div class="ciclo-donuts-row" style="display:flex; gap:18px; align-items:flex-start; justify-content:center; flex-wrap:wrap;">
+            <div style="text-align:center;">
+              <div id="cicloDonutWrap"></div>
+              <div style="font-size:.72rem; color:var(--text-mut); margin-top:4px; font-weight:700;">Total planejado</div>
+            </div>
+            <div style="text-align:center;">
+              <div id="cicloDonutRestanteWrap"></div>
+              <div style="font-size:.72rem; color:var(--text-mut); margin-top:4px; font-weight:700;">Restante</div>
+            </div>
           </div>
-          <div style="text-align:center;">
-            <div id="cicloDonutRestanteWrap"></div>
-            <div style="font-size:.72rem; color:var(--text-mut); margin-top:4px; font-weight:700;">Restante</div>
-          </div>
+          <div id="cicloLegend" class="ciclo-legend"></div>
         </div>
-        <div id="cicloLegend" class="ciclo-legend"></div>
+        <div class="card" id="cicloAtrasosCard">
+          <h2 style="margin:0 0 12px;">Atrasadas</h2>
+          <div id="cicloAtrasos"></div>
+        </div>
       </div>
       <details class="card recolhivel">
         <summary><h2>Sequência de Estudos</h2><span class="marcador" aria-hidden="true"></span></summary>
@@ -2253,10 +2269,6 @@
         </div>
         <div id="cicloSequencia"></div>
       </details>
-      <div class="card" id="cicloAtrasosCard" hidden>
-        <h2 style="margin:0 0 12px;">Atrasadas</h2>
-        <div id="cicloAtrasos"></div>
-      </div>
       <div class="card">
         <h2 style="margin:0 0 12px;">Histórico de ciclos</h2>
         <div id="cicloHistorico"></div>
@@ -4385,12 +4397,13 @@ function buildAtrasadasHtml(comCabecalho){
     </button>`).join('')}</div>`;
 }
 function renderCicloAtrasos(){
-  const card = document.getElementById('cicloAtrasosCard');
   const wrap = document.getElementById('cicloAtrasos');
-  if(!card || !wrap) return;
+  if(!wrap) return;
+  // ago/2026: o card fica sempre visível (lado a lado com o Ciclo - ver .ciclo-side-row), então
+  // sem nenhum atraso ele mostra um estado vazio em vez de sumir - mesmo padrão de
+  // renderCicloHistorico() pra "nenhum ciclo fechado ainda".
   const html = buildAtrasadasHtml(false);
-  card.hidden = !html;
-  wrap.innerHTML = html;
+  wrap.innerHTML = html || `<div class="empty">Nenhuma matéria atrasada agora. O que não couber na semana ao apertar "Atualizar ciclo" aparece aqui.</div>`;
   wrap.querySelectorAll('.atraso-item').forEach(b=>{
     b.addEventListener('click', ()=> iniciarSessaoAtraso(Number(b.dataset.si)));
   });
