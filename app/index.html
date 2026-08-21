@@ -1617,6 +1617,27 @@
     .ciclo-pend-item .cp-barra, .ciclo-pend-item .cp-pct{display:none;}
   }
 
+  /* Matérias com atraso acumulado (ver ATRASOS/buildAtrasadasHtml) - mesma gramática das
+     listas acima, com o tempo devido em destaque e uma ação explícita pra pagar. */
+  .atraso-lista{display:flex; flex-direction:column;}
+  .atraso-item{
+    display:grid; grid-template-columns:1fr auto auto;
+    gap:12px; align-items:center; width:100%; text-align:left;
+    min-height:32px; padding:5px 0;
+    background:transparent; border:0; border-top:1px solid var(--border);
+    color:inherit; font:inherit; cursor:pointer;
+    transition:background 140ms ease-out;
+  }
+  .atraso-item:last-child{border-bottom:1px solid var(--border);}
+  .atraso-item:hover{background:color-mix(in srgb, var(--text) 5%, transparent);}
+  .atraso-nm{font-size:.8125rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .atraso-tempo{font-family:'Courier Prime',ui-monospace,monospace; font-size:.6875rem; color:var(--yellow-dark); font-weight:700; white-space:nowrap;}
+  .atraso-acao{font-size:.6875rem; font-weight:700; color:var(--green-dark); white-space:nowrap;}
+  @media (max-width:560px){
+    .atraso-item{grid-template-columns:1fr auto; gap:8px;}
+    .atraso-item .atraso-acao{display:none;}
+  }
+
   /* Estado vazio que instrui, em vez de dizer "nada aqui". */
   .hib-vazio{
     border:1px dashed var(--border); padding:16px;
@@ -1711,8 +1732,6 @@
   .ciclo-seq-row .info{flex:1;}
   .ciclo-seq-row .info b{display:block; font-size:.92rem; font-weight:750;}
   .ciclo-seq-row .info small{color:var(--text-mut); font-size:.74rem;}
-  .cs-backlog{display:inline-block; margin-top:3px; padding:1px 6px; border-radius:4px;
-    background:var(--warn-bg); color:var(--yellow-dark); font-weight:700;}
   .ciclo-seq-row .bar{margin-top:6px;}
   .ciclo-seq-row .pct{font-size:.7rem; color:var(--text-mut); text-align:right; margin-top:3px;}
   .ciclo-seq-row .chev{font-size:1rem; color:var(--text-mut);}
@@ -2234,6 +2253,10 @@
         </div>
         <div id="cicloSequencia"></div>
       </details>
+      <div class="card" id="cicloAtrasosCard" hidden>
+        <h2 style="margin:0 0 12px;">Atrasadas</h2>
+        <div id="cicloAtrasos"></div>
+      </div>
       <div class="card">
         <h2 style="margin:0 0 12px;">Histórico de ciclos</h2>
         <div id="cicloHistorico"></div>
@@ -3603,6 +3626,16 @@ function endActiveSession(extra){
     }
   }
   state.sessions.push(sessao); // conta pra todas as metricas gerais de tempo e pro Ciclo (cicloEstudadoSegundos etc.) independente de ter vindo do calendario e de ter batido os 30min ou nao - ver comentario abaixo
+  // ago/2026: sessao marcada como pagamento de atraso (ver ATRASOS/iniciarSessaoAtraso) abate o
+  // tempo estudado do saldo congelado - nunca deixa negativo (Math.max 0), mesmo estudando mais
+  // do que a divida restante.
+  if(a.pagandoAtraso){
+    const cc = ensureCicloDefaults();
+    if(cc){
+      if(!cc.atrasos) cc.atrasos = {};
+      cc.atrasos[a.si] = Math.max(0, (cc.atrasos[a.si]||0) - tempoLiquidoSegundos);
+    }
+  }
   state.activeSession = null;
   // ago/2026 (bug reportado pelo Bruno): antes, so a sessao nascida de um clique NUM BLOCO
   // especifico do Calendario da Semana marcava aquele bloco como concluido - uma sessao pela
@@ -4028,6 +4061,7 @@ function ensureCicloDefaults(){
   if(!c.ordem || c.ordem.length!==SUBJECTS.length) c.ordem = SUBJECTS.map((s,si)=>si);
   if(c.ciclosCompletos===undefined) c.ciclosCompletos = 0;
   if(!c.cicloStartedAt) c.cicloStartedAt = Date.now();
+  if(!c.atrasos) c.atrasos = {}; // ago/2026 - ver secao ATRASOS mais abaixo
   return c;
 }
 // Uma materia pode ser excluida do ciclo (aba Planejamento). Isso vale pro app inteiro: ela
@@ -4285,26 +4319,99 @@ function proximaAulaPendenteMateria(si){
   return s.aulas.length-1;
 }
 
+/* ===================== ATRASOS (Ciclo) =====================
+   ago/2026 (pedido do Bruno, ver regras-sistema-horas.md secao 13): antes, quando o deficit
+   acumulado de uma materia nao cabia no orcamento semanal (horasPorSemana), gerarSemanaCalendario
+   tentava encaixar o maximo possivel na propria semana (distribuirComTeto), e o que sobrava so
+   aparecia como um selo pequeno "nao cabe nesta semana" - um numero recalculado do zero a cada
+   semana, sem historico proprio nem jeito de "quitar" de proposito.
+
+   Agora o atraso vira uma DIVIDA CONGELADA por materia (state.ciclo.atrasos[si], em segundos):
+   toda vez que uma semana fecha de verdade (botao "Atualizar ciclo pra esta semana" - unico
+   momento em que uma semana civil vira a proxima, regra 6), qualquer bloco que ainda estava
+   PENDENTE nela (ver blocosPendentesSemanaSegundos) e somado no atraso da materia
+   (congelarAtrasosDaSemana). A partir dai a semana NOVA e gerada so com o ritmo normal (peso x
+   horasPorSemana - gerarSemanaCalendario nao olha mais deficit acumulado pra decidir quantos
+   blocos dar a cada materia). O atraso fica OUT do orcamento semanal, sem prazo fixo - so
+   diminui quando o usuario escolhe estudar ele de proposito, pela secao "Atrasadas" (aba Ciclo e
+   Painel), que inicia uma sessao normal (mesma materia, conta pra tudo que sempre contou) mas
+   marcada como pagamento de divida (iniciarSessaoAtraso/pagarAtraso). */
+function congelarAtrasosDaSemana(){
+  const c = ensureCalendarioDefaults();
+  const cc = ensureCicloDefaults();
+  if(!c || !cc) return;
+  if(!cc.atrasos) cc.atrasos = {};
+  Metricas.materiasAtivas().forEach(({si})=>{
+    const naoFeito = blocosPendentesSemanaSegundos(si);
+    if(naoFeito>0) cc.atrasos[si] = (cc.atrasos[si]||0) + naoFeito;
+  });
+}
+// Quanto uma materia ainda deve de atraso, em segundos - 0 se nunca atrasou ou ja quitou tudo.
+// Nao mostra atraso de materia que ja bateu a meta da rodada inteira (cicloPct>=100): se o
+// numero geral ja fechou, o atraso antigo virou irrelevante (ver secao acima).
+function atrasoSegundos(si){
+  const cc = ensureCicloDefaults();
+  if(!cc || !cc.atrasos) return 0;
+  if(cicloPct(si)>=100) return 0;
+  return Math.max(0, cc.atrasos[si]||0);
+}
+// Abre o MESMO modal de inicio de sessao usado pelo Calendario (openStartSessionModal - deixa
+// escolher teoria/questoes normalmente), so marcando de proposito (via sessaoAtrasoPendente,
+// lido dentro do clique "Iniciar cronometro" do modal) que a sessao resultante e pagamento de
+// atraso (state.activeSession.pagandoAtraso=true). endActiveSession() abate o tempo estudado do
+// saldo de atrasos[si] quando essa flag esta marcada - ver la.
+function iniciarSessaoAtraso(si){
+  if(state.activeSession){ toast('Encerre a sessão em andamento antes de iniciar outra.'); return; }
+  sessaoAtrasoPendente = true;
+  openStartSessionModal(si, proximaAulaPendenteMateria(si), null); // mesma logica ja usada pelo Calendario (abrirSessaoBloco)
+}
+// Lista de matérias com atraso>0 (maior primeiro) - usada tanto na aba Ciclo (renderCicloAtrasos,
+// sem cabeçalho próprio, ver card "Atrasadas" no HTML) quanto no Painel (renderHibrido, com
+// cabeçalho no estilo dos outros grupos - ver hib-grupo/ciclosPendentesHtml). Retorna '' quando
+// não há nenhuma matéria atrasada, pra quem chama poder esconder o card/seção inteira.
+function buildAtrasadasHtml(comCabecalho){
+  if(!state.ciclo) return '';
+  const itens = Metricas.materiasAtivas()
+    .map(({s,si})=> ({ s, si, atraso: atrasoSegundos(si) }))
+    .filter(x=> x.atraso>0)
+    .sort((a,b)=> b.atraso-a.atraso);
+  if(!itens.length) return '';
+  const header = comCabecalho ? `<div class="hib-grupo">atrasadas · ${itens.length} ${itens.length===1?'matéria':'matérias'}</div>` : '';
+  return header + `<div class="atraso-lista">${itens.map(x=>`
+    <button type="button" class="atraso-item" data-si="${x.si}" title="Iniciar cronômetro dedicado a pagar este atraso">
+      <span class="atraso-nm">${escapeHtml(x.s.name)}</span>
+      <span class="atraso-tempo">${fmtDuracao(x.atraso)}</span>
+      <span class="atraso-acao">Estudar atraso ›</span>
+    </button>`).join('')}</div>`;
+}
+function renderCicloAtrasos(){
+  const card = document.getElementById('cicloAtrasosCard');
+  const wrap = document.getElementById('cicloAtrasos');
+  if(!card || !wrap) return;
+  const html = buildAtrasadasHtml(false);
+  card.hidden = !html;
+  wrap.innerHTML = html;
+  wrap.querySelectorAll('.atraso-item').forEach(b=>{
+    b.addEventListener('click', ()=> iniciarSessaoAtraso(Number(b.dataset.si)));
+  });
+}
+
 /* ===================== CALENDÁRIO DA SEMANA (Ciclo) =====================
    Visão semanal do Ciclo: a mesma meta de horas por matéria (cicloMetaSegundos)
    distribuída em blocos de 30min ao longo dos 7 dias, que o usuário pode arrastar
    pra reorganizar. Não é um sistema paralelo ao Ciclo — é só outra forma de olhar
-   pro mesmo motor (peso, meta, estudado, déficit). Guardado em state.calendario.
+   pro mesmo motor (peso, meta, estudado). Guardado em state.calendario.
 
-   Geração da semana: em vez de repetir sempre a mesma meta bruta por matéria, cada
-   semana nasce olhando o DÉFICIT atual (cicloMetaSegundos - cicloEstudadoSegundos) de
-   cada matéria ativa. Isso resolve sozinho a regra de "o que não foi estudado empurra
-   pra semana seguinte": matéria que ficou pra trás numa semana automaticamente puxa
-   mais blocos na próxima, porque o déficit dela continua alto; matéria em dia recebe
-   proporcionalmente menos. O total da semana sempre fecha exatamente em
-   horasPorSemana - nenhuma matéria individual passa do seu próprio déficit (nunca
-   aloca mais do que falta pra ela), mas a sobra de quem tem pouco déficit é
-   redistribuída pras que ainda precisam (ver distribuirComTeto), em vez de encolher a
-   semana. Só quando a soma de TODOS os déficits do ciclo for menor que
-   horasPorSemana (ciclo perto de fechar) a semana fica mesmo mais curta - não tem
-   como inventar trabalho que não existe. Uma vez gerada, a semana NÃO se regenera
-   sozinha em cada render (isso apagaria os arrastos manuais do usuário) - só quando a
-   segunda-feira vira (ver checkCalendarioRollover). */
+   Geração da semana (ago/2026, simplificado - ver ATRASOS acima): cada semana nasce
+   SEMPRE com o ritmo normal, proporcional ao peso de cada matéria ativa
+   (horasPorSemana * peso/totalPeso) - não olha mais déficit acumulado pra decidir
+   quantos blocos dar a cada matéria. O que não foi estudado até a virada da semana
+   (botão "Atualizar ciclo pra esta semana") vira ATRASO congelado
+   (state.ciclo.atrasos[si] - ver congelarAtrasosDaSemana), por fora deste orçamento
+   semanal, sem prazo fixo - só é pago via a sessão dedicada "Estudar atraso" (seção
+   "Atrasadas"). Uma vez gerada, a semana NÃO se regenera sozinha em cada render (isso
+   apagaria os arrastos manuais do usuário) - só quando a segunda-feira vira (ver
+   checkCalendarioRollover). */
 const DIAS_SEMANA = ['seg','ter','qua','qui','sex','sab','dom'];
 const DIAS_SEMANA_LABEL = { seg:'Seg', ter:'Ter', qua:'Qua', qui:'Qui', sex:'Sex', sab:'Sáb', dom:'Dom' };
 // Segunda-feira (YYYY-MM-DD) da semana que contém dataStr.
@@ -4316,9 +4423,11 @@ function segundaFeiraDe(dataStr){
   return dataLocalDe(d.getTime());
 }
 // Sobe esse numero sempre que a logica de geracao da semana (decomporMateriaEmItens,
-// distribuirComTeto, etc) mudar de um jeito que invalida semanas ja geradas - forca uma
+// distribuirInteiros, etc) mudar de um jeito que invalida semanas ja geradas - forca uma
 // regeneracao automatica (unica, sem botao) na proxima visita, mesmo sem virar a segunda.
-const CALENDARIO_ALGO_VERSION = 3;
+// v4 (ago/2026): geracao deixou de olhar deficit acumulado (ver ATRASOS) - semanas geradas
+// pela v3 podiam ter blocos "encolhidos" por causa do teto do deficit, que nao existe mais.
+const CALENDARIO_ALGO_VERSION = 4;
 function ensureCalendarioDefaults(){
   if(!state.calendario) state.calendario = { semanaRef:null, blocos:{}, diasPeso:null, algoVersion:null };
   const c = state.calendario;
@@ -4349,41 +4458,6 @@ function distribuirInteiros(pesos, total){
   for(let i=0; i<resto; i++) info[chaves[i % chaves.length]].inteiro++;
   chaves.forEach(k=> out[k]=info[k].inteiro);
   return out;
-}
-// Igual distribuirInteiros, mas cada chave tem um TETO (tetos[chave]) que a distribuicao
-// proporcional nunca pode ultrapassar. Quando a cota proporcional de uma chave bateria no
-// teto dela, ela e travada exatamente no teto e o que sobra e redistribuido, proporcionalmente,
-// entre as chaves que ainda nao bateram teto - repete ate estabilizar (no maximo uma rodada
-// por chave). Sempre fecha em exatamente `total`, A MENOS que a soma de todos os tetos seja
-// menor que `total` - nesse caso fecha na soma dos tetos (o maximo fisicamente possivel), sem
-// inventar mais do que existe. E o que garante que o Calendario da semana bate exatamente com
-// horasPorSemana do Ciclo sempre que houver déficit suficiente pra preencher, mesmo com
-// matérias que estão perto de terminar (déficit pequeno) puxando a sobra pras outras.
-function distribuirComTeto(pesos, tetos, total){
-  let pesosAtivos = Object.assign({}, pesos);
-  const fixado = {};
-  let orcamento = total;
-  const maxIter = Object.keys(pesos).length + 1;
-  for(let iter=0; iter<maxIter; iter++){
-    const chaves = Object.keys(pesosAtivos);
-    if(chaves.length===0 || orcamento<=0) break;
-    const dist = distribuirInteiros(pesosAtivos, orcamento);
-    let travouAlguma = false;
-    chaves.forEach(k=>{
-      const teto = tetos[k];
-      if(teto!=null && dist[k]>teto){
-        fixado[k] = teto;
-        orcamento -= teto;
-        delete pesosAtivos[k];
-        travouAlguma = true;
-      }
-    });
-    if(!travouAlguma){
-      chaves.forEach(k=>{ fixado[k]=dist[k]; });
-      break;
-    }
-  }
-  return fixado;
 }
 // Converte os minutos totais que uma matéria recebeu na semana numa lista de ITENS pra
 // intercalar. Todo bloco é de 30min ou 45min - nunca 15 nem 60. Por padrão os blocos de 30min
@@ -4446,55 +4520,16 @@ function gerarSemanaCalendario(forcar){
     return;
   }
   const totalUnid15 = Math.max(0, Math.round(cc.horasPorSemana*4)); // unidades de 15min na semana toda (orcamento nominal, baseado em horasPorSemana)
-  // Base de distribuicao entre materias: deficit atual (o que "empurra" pendencia pra
-  // frente); se ninguem tem deficit (ciclo em dia/quase fechando), cai pro peso normal
-  // pra semana nao ficar vazia bem no fim do ciclo. No ramo de deficit, cada materia tem um
-  // TETO = seu proprio deficit (nunca aloca mais do que falta pra ela), mas a sobra de quem
-  // tem pouco deficit e redistribuida pra quem ainda precisa (distribuirComTeto), entao o
-  // total da semana bate exatamente em horasPorSemana sempre que o deficit total do ciclo
-  // permitir. No ramo de peso (sem deficit em ninguem), nao ha teto - e so a distribuicao
-  // proporcional normal.
+  // Base de distribuicao entre materias: sempre proporcional ao peso (ver ATRASOS acima) -
+  // deficit acumulado nao entra mais aqui, so vira "atraso" congelado por fora deste orcamento.
   let baseMaterias = {};
-  let temDeficit = false;
-  Metricas.materiasAtivas().forEach(({si})=>{
-    const deficit = Math.max(0, cicloMetaSegundos(si)-cicloEstudadoSegundos(si));
-    if(deficit>0){ baseMaterias[si] = deficit; temDeficit = true; }
-  });
-  if(!temDeficit){
-    Metricas.materiasAtivas().forEach(({si})=>{ if(getCicloPeso(si)>0) baseMaterias[si]=getCicloPeso(si); });
-  }
+  Metricas.materiasAtivas().forEach(({si})=>{ if(getCicloPeso(si)>0) baseMaterias[si]=getCicloPeso(si); });
   if(Object.keys(baseMaterias).length===0 || totalUnid15<=0){
     DIAS_SEMANA.forEach(d=> c.blocos[d]=[]);
     save();
     return;
   }
-  let unid15PorMateria;
-  if(temDeficit){
-    const tetos = {};
-    let somaTetos = 0;
-    Object.keys(baseMaterias).forEach(siStr=>{
-      const t = Math.round(arredondar15min(baseMaterias[siStr])/900); // deficit em unidades de 15min
-      tetos[siStr] = t;
-      somaTetos += t;
-    });
-    // Cada materia tem seu proprio meta arredondado de forma INDEPENDENTE pra 15min (ver
-    // cicloMetaSegundos), entao a soma dos tetos pode nao bater com totalUnid15 (horasPorSemana)
-    // exatamente por causa desse arredondamento - cada materia pode desviar ate +-7,5min do seu
-    // valor exato, e essa folga pode se acumular em qualquer direcao. Se o orcamento nominal
-    // (totalUnid15) fosse usado sempre como teto rigido, a materia com a menor sobra no
-    // arredondamento proporcional acabaria perdendo 15min de forma essencialmente aleatoria -
-    // ex: uma materia mostra 4h45 no ciclo mas o calendario da semana so entregava 4h30. Por
-    // isso, quando a soma dos tetos fica dentro da margem de arredondamento esperada (numero de
-    // materias/2 unidades de 15min), usa a soma exata dos tetos como orcamento - cada materia
-    // recebe seu proprio teto integralmente. So mantem o teto rigido em horasPorSemana quando o
-    // deficit total realmente excede a semana por mais que essa margem (backlog de verdade, meio
-    // de ciclo) - nesse caso o excesso normal e' empurrado pra semana seguinte, como esperado.
-    const margemArredondamento = Math.ceil(Object.keys(tetos).length/2);
-    const orcamento = somaTetos<=totalUnid15+margemArredondamento ? somaTetos : totalUnid15;
-    unid15PorMateria = distribuirComTeto(baseMaterias, tetos, orcamento);
-  } else {
-    unid15PorMateria = distribuirInteiros(baseMaterias, totalUnid15); // sem teto - so proporcional ao peso
-  }
+  const unid15PorMateria = distribuirInteiros(baseMaterias, totalUnid15);
   const itensPorMateria = {};
   Object.keys(unid15PorMateria).forEach(siStr=>{
     const minutosMateria = unid15PorMateria[siStr]*15;
@@ -4621,6 +4656,7 @@ function ajusteSemanaTexto(registro){
 // fatorAjusteDesvio) refletem o ajuste, e a regeneracao dos blocos ja usa os pesos novos.
 function atualizarCicloSemanaManual(){
   const registro = registrarHistoricoSemana();
+  congelarAtrasosDaSemana(); // precisa rodar ANTES de gerarSemanaCalendario sobrescrever c.blocos - eh o unico momento em que os blocos ainda pendentes desta semana viram atraso (ver ATRASOS)
   gerarSemanaCalendario(true);
   renderPlanejamento();
   const ajuste = ajusteSemanaTexto(registro);
@@ -4738,21 +4774,6 @@ function blocosPendentesSemanaSegundos(si){
     (c.blocos[d]||[]).forEach(b=>{ if(b.si===si && !b.done) total += (b.duracaoMin||30)*60; });
   });
   return total;
-}
-// ago/2026 (pedido do Bruno): a Sequencia de Estudos mostra a meta CHEIA da rodada do ciclo
-// (cicloMetaSegundos), mas o Calendario da semana pode ter agendado MENOS do que essa materia
-// ainda precisa - quando a soma do deficit de todas as materias passa do orcamento semanal
-// (horasPorSemana), gerarSemanaCalendario corta um pouco de cada uma e empurra a sobra pra
-// semana seguinte (backlog "de verdade", nao bug - ver comentario em gerarSemanaCalendario).
-// Sem avisar isso, os dois numeros pareciam nao bater ("a materia mostra 1h30 mas so tem 45min
-// + 30min = 1h15 marcados na semana"). Esta funcao calcula exatamente esse buraco: quanto do
-// deficit ATUAL da materia no ciclo NAO cabe nos blocos que ainda restam pra ela nesta semana -
-// se sobrar algo, e' porque mesmo terminando tudo que esta agendado esta semana, a materia ainda
-// vai faltar pra bater a meta da rodada (o resto so aparece numa proxima semana).
-function backlogRodadaSegundos(si){
-  const deficitAgora = Math.max(0, cicloMetaSegundos(si)-cicloEstudadoSegundos(si));
-  const pendenteSemana = blocosPendentesSemanaSegundos(si);
-  return Math.max(0, deficitAgora-pendenteSemana);
 }
 // Move um bloco de (fromDia,fromIdx) pra (toDia,toIdx) - usado pelo arrastar-e-soltar.
 function moveCalendarBlock(fromDia, fromIdx, toDia, toIdx){
@@ -6240,10 +6261,14 @@ function renderHibrido(){
       ${reguaDominioHtml(d.pct)}
       <div class="hib-apoio">${apoio}</div>
     </div>`) + `
-    ${ciclosPendentesHtml()}`;
+    ${ciclosPendentesHtml()}
+    ${buildAtrasadasHtml(true)}`;
 
   box.querySelectorAll('.ciclo-pend-item').forEach(b=>{
     b.addEventListener('click', ()=> openSubjectTab(Number(b.dataset.si)));
+  });
+  box.querySelectorAll('.atraso-item').forEach(b=>{
+    b.addEventListener('click', ()=> iniciarSessaoAtraso(Number(b.dataset.si)));
   });
 }
 
@@ -9559,6 +9584,11 @@ document.querySelectorAll('#stovModes .stov-mode-btn').forEach(btn=>{
   });
 });
 
+// ago/2026: setado por iniciarSessaoAtraso (aba Ciclo/Painel, secao "Atrasadas") antes de abrir
+// este modal, e lido/zerado no clique "Iniciar cronometro" abaixo - marca a sessao criada como
+// pagamento de atraso (state.activeSession.pagandoAtraso), sem duplicar a logica do modal so
+// pra essa flag. Sempre zerado tambem ao fechar sem iniciar (closeStartSessionModal).
+let sessaoAtrasoPendente = false;
 function openStartSessionModal(si, ai, calendarRef){
   if(state.activeSession){ toast('Encerre a sessão em andamento antes de iniciar outra.'); return; }
   const body = document.getElementById('startSessionBody');
@@ -9581,16 +9611,22 @@ function openStartSessionModal(si, ai, calendarRef){
     });
   });
   document.getElementById('startSessionGo').addEventListener('click', ()=>{
-    if(startSession(si, ai, tipoSel)) activeSessionCalendarRef = calendarRef || null;
+    const pagandoAtraso = sessaoAtrasoPendente;
+    sessaoAtrasoPendente = false;
+    if(startSession(si, ai, tipoSel)){
+      activeSessionCalendarRef = calendarRef || null;
+      if(pagandoAtraso) state.activeSession.pagandoAtraso = true;
+    }
     closeStartSessionModal();
     renderTimerBar(); // abre a tela central do cronômetro (experiência principal)
     renderAll();
-    toast('Cronômetro iniciado');
+    toast(pagandoAtraso ? 'Cronômetro iniciado (pagando atraso de '+SUBJECTS[si].name+')' : 'Cronômetro iniciado');
   });
   document.getElementById('startSessionOverlay').classList.add('show');
 }
 function closeStartSessionModal(){
   document.getElementById('startSessionOverlay').classList.remove('show');
+  sessaoAtrasoPendente = false;
 }
 document.getElementById('startSessionClose').addEventListener('click', closeStartSessionModal);
 
@@ -9926,15 +9962,10 @@ function renderCicloSequencia(){
     const estudado = cicloEstudadoSegundos(si);
     const meta = cicloMetaSegundos(si);
     const pct = cicloPct(si);
-    // ago/2026 (pedido do Bruno): quando a semana nao tem espaco pra agendar toda a meta da
-    // rodada dessa materia (backlogRodadaSegundos), avisa aqui - senao o numero da meta ("1h30")
-    // parece nao bater com os blocos do Calendario da semana (que podem somar so 1h15, por ex).
-    const backlog = backlogRodadaSegundos(si);
     return `<div class="ciclo-seq-row" style="border-left-color:${subjectColor(si)}" data-si="${si}">
       <div class="info">
         <b>${SUBJECTS[si].name}</b>
         <small>${fmtDuracao(estudado)} | ${fmtHorasMin(meta)}</small>
-        ${backlog>0?`<small class="cs-backlog">+${fmtDuracao(backlog)} não cabe nesta semana · vai pra próxima</small>`:''}
         <div class="bar sm"><i style="width:${pct}%; background:${subjectColor(si)};"></i></div>
         <div class="pct">${pct}%</div>
       </div>
@@ -10041,6 +10072,7 @@ function renderPlanejamento(){
 
   renderCicloSequencia();
   renderCicloAvisoAjuste();
+  renderCicloAtrasos();
   renderCicloHistorico();
   renderCalendario();
 }
