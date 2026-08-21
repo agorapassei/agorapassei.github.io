@@ -1928,11 +1928,12 @@
 
   <!-- PAINEL (dashboard customizável) -->
   <section class="view active" id="view-painel">
-    <!-- HIBRIDO (redesign ago/2026): o placar de dominio e a fila de vencidos vem ANTES
-         do grid de widgets. Motivo de produto, nao de estetica: a pergunta das 22h e
-         "onde eu estou atrasado e o que eu faco hoje", e ela tem de ser respondida na
-         primeira dobra, sem clique. O grid de widgets continua abaixo, com o escopo por
-         widget e a reordenacao intactos. Ver design/DECISOES.md. -->
+    <!-- HIBRIDO (redesign ago/2026): o placar de dominio do edital e o resumo do ciclo
+         atual (quando ha ciclo configurado) vem ANTES do grid de widgets, na primeira
+         dobra. O painel "hoje" (fila de aulas vencidas/em leitura) foi removido a pedido
+         do Bruno em 19/08/2026 - a mesma informacao ja aparece na aba Revisao e no
+         badge da aba. O grid de widgets continua abaixo, com o escopo por widget e a
+         reordenacao intactos. Ver design/DECISOES.md. -->
     <div id="dashHibrido"></div>
     <div class="dash-editbar">
       <button class="btn ghost sm" id="btnDashEdit"><svg class=ic-svg aria-hidden=true><use href=#ic-settings></use></svg> Personalizar</button>
@@ -2921,11 +2922,6 @@ function revisoesPendentes(){
     });
   });
   return out;
-}
-// Contagem usada no badge da aba e no widget do Painel: o que ja venceu (atrasado + hoje).
-function revisoesVencidasCount(){
-  const today = todayStr();
-  return revisoesPendentes().filter(i=> i.rec.nextReview<=today).length;
 }
 // Plano COMPLETO de revisoes de uma aula: as 3 etapas de uma vez, e nao so a proxima.
 // A etapa atual eh a que esta de fato agendada (data firme); as seguintes sao PREVISOES,
@@ -6117,11 +6113,13 @@ function wireWidgetControls(grid){
 }
 let dashEditMode = false;
 /* ===================== HIBRIDO DO PAINEL =====================
-   Redesign de ago/2026. Placar de dominio + fila de vencidos, acima do grid.
+   Redesign de ago/2026. Placar de dominio do edital + resumo do ciclo atual
+   (ciclosPendentesHtml), acima do grid. A fila "hoje" (aulas vencidas/em
+   leitura, filaHojeHtml) foi removida a pedido do Bruno em 19/08/2026.
    NAO CALCULA NADA NOVO: consome computeMastery, computeFirstTryRate,
-   totalQuestoesAll, revisoesPendentes, pagesReadFor e theoryPages, que ja
-   existiam. Isto e camada de apresentacao - o escopo do redesign proibe tocar
-   em logica de negocio ou calculo de metrica. */
+   totalQuestoesAll, pagesReadFor e theoryPages, que ja existiam. Isto e
+   camada de apresentacao - o escopo do redesign proibe tocar em logica de
+   negocio ou calculo de metrica. */
 
 /* A ASSINATURA: a Taxa de Dominio como traco de marca-texto sobre a linha do
    edital. Desenhada de 0 a 100 e revelada por clip-path, entao cresce so para a
@@ -6144,59 +6142,6 @@ function reguaDominioHtml(pct){
     <svg viewBox="0 0 100 22" preserveAspectRatio="none" aria-hidden="true">
       <path class="marca" d="${d}Z"/>
     </svg></div>`;
-}
-
-/* A FILA: uma linha por apostila com pendencia, ordenada por atraso. Materia
-   fora do ciclo nao entra aqui - so aparece de novo se for reativada. */
-function filaHojeHtml(){
-  const hoje = todayStr();
-  const dias = iso => Math.round((Date.parse(hoje+'T00:00:00Z') - Date.parse(iso+'T00:00:00Z'))/864e5);
-  const itens = [];
-  Metricas.materiasAtivas().forEach(({s,si})=>{
-    const fora = false;
-    s.aulas.forEach((a,ai)=>{
-      const rec = state.aulas[key(si,ai)];
-      if(!rec || rec.mastered) return;
-      const cod = 'A'+String(ai).padStart(2,'0');
-      const nome = a.replace(/^\d+\w?\s*-\s*/,'');
-      if(rec.studied && rec.nextReview){
-        const d = dias(rec.nextReview);
-        const etapa = rec.stage===ETAPA_EXERCICIOS ? 'exercícios' : rec.stage+'ª revisão';
-        if(d>0)       itens.push({si,ai,cod,subj:s.name,nome,est:'vencido',rot:etapa,num:'venceu há '+d+'d',ord:-1000-d,fora});
-        else if(d===0)itens.push({si,ai,cod,subj:s.name,nome,est:'hoje',   rot:etapa,num:'vence hoje',      ord:-500,     fora});
-        else          itens.push({si,ai,cod,subj:s.name,nome,est:'futuro', rot:etapa,num:'em '+(-d)+'d',    ord:200-d,    fora});
-      } else if(!rec.studied && (rec.pagesRead||0) > 0){
-        const t = theoryPages(si,ai);
-        // ago/2026 (pedido do Bruno): mostra tambem o tempo ja estudado dessa aula, nao so a
-        // contagem de paginas - mesma fonte usada no resto do app (tempoTotalTeoriaApostila).
-        const tempoAula = tempoTotalTeoriaApostila(si,ai);
-        itens.push({si,ai,cod,subj:s.name,nome,est:'leitura',rot:'leitura',
-                    num:rec.pagesRead+'/'+t+' pág'+(tempoAula>0?' · '+fmtDuracao(tempoAula):''), ord:-(rec.pagesRead/t), fora});
-      }
-    });
-  });
-  itens.sort((a,b)=> (a.fora-b.fora) || (a.ord-b.ord));
-
-  if(!itens.length){
-    return `<div class="hib-vazio">
-      <b>Nada vencido — e nada começado.</b>
-      Escolha uma apostila e inicie o cronômetro em teoria. Quando terminar a leitura,
-      os exercícios entram com prazo de 48 h, e as três revisões passam a aparecer aqui
-      por data.</div>`;
-  }
-  const IC = { vencido:'ic-clock', hoje:'ic-flag', leitura:'ic-pencil', futuro:'ic-check' };
-  let html = '<div class="hib-fila">', grupoFora = false;
-  itens.slice(0,12).forEach(f=>{
-    if(f.fora && !grupoFora){ html += '<div class="hib-grupo">fora do ciclo</div>'; grupoFora = true; }
-    html += `<button type="button" class="hib-item" data-si="${f.si}" data-est="${f.fora?'fora':f.est}">
-      <svg class=ic-svg aria-hidden=true><use href=#${f.fora?'ic-dot':IC[f.est]}></use></svg>
-      <span class="hib-cod">${f.cod}</span>
-      <span class="hib-nm">${escapeHtml(f.subj)} <small>· ${escapeHtml(f.nome)}</small></span>
-      <span class="hib-est">${f.rot}</span>
-      <span class="hib-num">${f.num}</span>
-    </button>`;
-  });
-  return html + '</div>';
 }
 
 /* Quanto falta de HORA para fechar o ciclo atual, matéria por matéria.
@@ -6264,7 +6209,6 @@ function renderHibrido(){
   const ft = computeFirstTryRate();
   const banco = totalQuestoesAll();
   const pend = m.seen - m.dominated;
-  const vencidos = revisoesVencidasCount();
   const semNada = pagesReadAll()===0 && m.seen===0;
 
   /* Rótulos explícitos: o bloco antigo dizia só "3 pendentes · 4.228 no banco · 1ª
@@ -6296,11 +6240,9 @@ function renderHibrido(){
       ${reguaDominioHtml(d.pct)}
       <div class="hib-apoio">${apoio}</div>
     </div>`) + `
-    <div class="hib-grupo">hoje${vencidos?' · '+vencidos+(vencidos>1?' vencidos':' vencido'):''}</div>
-    ${filaHojeHtml()}
     ${ciclosPendentesHtml()}`;
 
-  box.querySelectorAll('.hib-item, .ciclo-pend-item').forEach(b=>{
+  box.querySelectorAll('.ciclo-pend-item').forEach(b=>{
     b.addEventListener('click', ()=> openSubjectTab(Number(b.dataset.si)));
   });
 }
