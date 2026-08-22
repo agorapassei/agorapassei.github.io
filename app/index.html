@@ -1617,27 +1617,6 @@
     .ciclo-pend-item .cp-barra, .ciclo-pend-item .cp-pct{display:none;}
   }
 
-  /* Matérias com atraso acumulado (ver ATRASOS/buildAtrasadasHtml) - mesma gramática das
-     listas acima, com o tempo devido em destaque e uma ação explícita pra pagar. */
-  .atraso-lista{display:flex; flex-direction:column;}
-  .atraso-item{
-    display:grid; grid-template-columns:1fr auto auto;
-    gap:12px; align-items:center; width:100%; text-align:left;
-    min-height:32px; padding:5px 0;
-    background:transparent; border:0; border-top:1px solid var(--border);
-    color:inherit; font:inherit; cursor:pointer;
-    transition:background 140ms ease-out;
-  }
-  .atraso-item:last-child{border-bottom:1px solid var(--border);}
-  .atraso-item:hover{background:color-mix(in srgb, var(--text) 5%, transparent);}
-  .atraso-nm{font-size:.8125rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-  .atraso-tempo{font-family:'Courier Prime',ui-monospace,monospace; font-size:.6875rem; color:var(--yellow-dark); font-weight:700; white-space:nowrap;}
-  .atraso-acao{font-size:.6875rem; font-weight:700; color:var(--green-dark); white-space:nowrap;}
-  @media (max-width:560px){
-    .atraso-item{grid-template-columns:1fr auto; gap:8px;}
-    .atraso-item .atraso-acao{display:none;}
-  }
-
   /* Estado vazio que instrui, em vez de dizer "nada aqui". */
   .hib-vazio{
     border:1px dashed var(--border); padding:16px;
@@ -1715,14 +1694,6 @@
 
   /* Aba Planejamento (Ciclo de Estudos) */
   .ciclo-actions{display:flex; gap:8px; margin-bottom:14px;}
-  /* Ciclo (roscas) e Atrasadas lado a lado, metade da largura cada (pedido do Bruno,
-     ago/2026) - os dois .card viram filhos diretos deste grid, sem precisar de classe extra
-     neles. Empilha em 1 coluna abaixo de 720px pra não espremer as roscas. */
-  .ciclo-side-row{display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:stretch; margin-bottom:14px;}
-  .ciclo-side-row > .card{margin:0;}
-  @media (max-width:720px){
-    .ciclo-side-row{grid-template-columns:1fr;}
-  }
   .ciclo-actions .btn{flex:1; font-size:.76rem; padding:10px 6px;}
   .ciclo-stats-row{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
   .ciclo-stat h2{font-size:.78rem; color:var(--text-mut); font-weight:700; margin:0 0 8px;}
@@ -2236,30 +2207,26 @@
           <div class="bar" style="margin-top:8px;"><i id="cicloStatProgressoBar" style="width:0%"></i></div>
         </div>
       </div>
-      <!-- ago/2026 (pedido do Bruno): rosca do Ciclo e "Atrasadas" lado a lado, cada uma com
-           metade da largura - ver .ciclo-side-row no CSS. Em telas estreitas empilha (1 coluna). -->
-      <div class="ciclo-side-row">
-        <div class="card">
-          <h2>Ciclo</h2>
-          <!-- Segunda rosca "Restante" (ago/2026, pedido do Bruno): ao lado da rosca de sempre
-               (total planejado da semana, fatiado por materia), uma segunda rosca com o que
-               ainda falta estudar de cada materia - ver buildCicloDonutRestanteHtml. -->
-          <div class="ciclo-donuts-row" style="display:flex; gap:18px; align-items:flex-start; justify-content:center; flex-wrap:wrap;">
-            <div style="text-align:center;">
-              <div id="cicloDonutWrap"></div>
-              <div style="font-size:.72rem; color:var(--text-mut); margin-top:4px; font-weight:700;">Total planejado</div>
-            </div>
-            <div style="text-align:center;">
-              <div id="cicloDonutRestanteWrap"></div>
-              <div style="font-size:.72rem; color:var(--text-mut); margin-top:4px; font-weight:700;">Restante</div>
-            </div>
+      <div class="card">
+        <h2>Ciclo</h2>
+        <!-- Segunda rosca "Restante" (ago/2026, pedido do Bruno): ao lado da rosca de sempre
+             (total planejado da semana, fatiado por materia), uma segunda rosca com o que
+             ainda falta estudar de cada materia - ver buildCicloDonutRestanteHtml. -->
+        <div class="ciclo-donuts-row" style="display:flex; gap:18px; align-items:flex-start; justify-content:center; flex-wrap:wrap;">
+          <div style="text-align:center;">
+            <div id="cicloDonutWrap"></div>
+            <div style="font-size:.72rem; color:var(--text-mut); margin-top:4px; font-weight:700;">Total planejado</div>
           </div>
-          <div id="cicloLegend" class="ciclo-legend"></div>
+          <div style="text-align:center;">
+            <div id="cicloDonutRestanteWrap"></div>
+            <div style="font-size:.72rem; color:var(--text-mut); margin-top:4px; font-weight:700;">Restante</div>
+          </div>
         </div>
-        <div class="card" id="cicloAtrasosCard">
-          <h2 style="margin:0 0 12px;">Atrasadas</h2>
-          <div id="cicloAtrasos"></div>
-        </div>
+        <div id="cicloLegend" class="ciclo-legend"></div>
+        <!-- ago/2026 (pedido do Bruno): pesos recalculados toda semana com base no que esta
+             pendente, pra que as materias terminem juntas na data alvo (Metas) - ver
+             renderCicloRitmoAlvo/pesoSugerido/recalcularPesosCiclo. -->
+        <div id="cicloRitmoAlvo"></div>
       </div>
       <details class="card recolhivel">
         <summary><h2>Sequência de Estudos</h2><span class="marcador" aria-hidden="true"></span></summary>
@@ -2567,6 +2534,7 @@
 <script src="question_bank.js"></script>
 <script src="provas.js"></script>
 <script>
+
 /* ===================== MARCA (título/nome do produto) =====================
    O motor é o mesmo pra todos os produtos - só o que muda é CURRICULO.tema,
    carregado do curriculo.js de cada produto. Aplica o nome nos lugares que
@@ -3638,16 +3606,6 @@ function endActiveSession(extra){
     }
   }
   state.sessions.push(sessao); // conta pra todas as metricas gerais de tempo e pro Ciclo (cicloEstudadoSegundos etc.) independente de ter vindo do calendario e de ter batido os 30min ou nao - ver comentario abaixo
-  // ago/2026: sessao marcada como pagamento de atraso (ver ATRASOS/iniciarSessaoAtraso) abate o
-  // tempo estudado do saldo congelado - nunca deixa negativo (Math.max 0), mesmo estudando mais
-  // do que a divida restante.
-  if(a.pagandoAtraso){
-    const cc = ensureCicloDefaults();
-    if(cc){
-      if(!cc.atrasos) cc.atrasos = {};
-      cc.atrasos[a.si] = Math.max(0, (cc.atrasos[a.si]||0) - tempoLiquidoSegundos);
-    }
-  }
   state.activeSession = null;
   // ago/2026 (bug reportado pelo Bruno): antes, so a sessao nascida de um clique NUM BLOCO
   // especifico do Calendario da Semana marcava aquele bloco como concluido - uma sessao pela
@@ -4073,7 +4031,6 @@ function ensureCicloDefaults(){
   if(!c.ordem || c.ordem.length!==SUBJECTS.length) c.ordem = SUBJECTS.map((s,si)=>si);
   if(c.ciclosCompletos===undefined) c.ciclosCompletos = 0;
   if(!c.cicloStartedAt) c.cicloStartedAt = Date.now();
-  if(!c.atrasos) c.atrasos = {}; // ago/2026 - ver secao ATRASOS mais abaixo
   return c;
 }
 // Uma materia pode ser excluida do ciclo (aba Planejamento). Isso vale pro app inteiro: ela
@@ -4091,22 +4048,37 @@ function setSubjectActive(si, ativa){
   c.materiasAtivas[si] = !!ativa;
   save();
 }
-// Peso sugerido: proporcional ao tempo estimado que falta pra terminar a materia (paginas que
-// faltam x ritmo de leitura efetivo). Estudando na proporcao desses pesos, todas as materias
-// tendem a terminar de ser lidas perto da mesma data, em vez de uma ficar largada pro final.
-// Depois de multiplicado pelo tempo restante, o valor passa por fatorAjusteDesvio: quem
-// sobrou muito da meta no ciclo anterior perde um pouco de peso; quem ficou muito abaixo
-// ganha um pouco — sem mexer no piso de 30min/incrementos de 15min, que continuam só em
-// arredondar15min (chamado depois, em cicloMetaSegundos, a partir deste peso já ajustado).
+// Peso sugerido (ago/2026, redesenhado - retirada a mecanica de "atraso"/divida congelada,
+// pedido do Bruno: "toda semana os pesos devem ser recalculados de acordo com o que ainda
+// esta pendente, para que as materias terminem juntas, dentro do possivel, na data alvo"):
+// proporcional SOMENTE ao tempo estimado que falta pra terminar a materia (paginas que faltam
+// x ritmo de leitura efetivo, ou tempoRestanteMateria quando ja ha ritmo suficiente medido).
+// Nao ha mais nenhum fator de ajuste por desempenho passado (o antigo fatorAjusteDesvio foi
+// removido) - o peso reflete só o que falta AGORA, recalculado do zero toda semana (ver
+// recalcularPesosCiclo/atualizarCicloSemanaManual). Matematicamente, distribuir o orcamento
+// semanal proporcional ao que falta de cada materia faz todas convergirem pro mesmo numero de
+// semanas até zerar (ver renderCicloRitmoAlvo pra comparação com a data alvo escolhida em
+// Metas). Piso de 30min/incrementos de 15min continuam só em arredondar15min (cicloMetaSegundos)
+// e em distribuirComPiso (Calendário da Semana).
 function pesoSugerido(si){
   const restanteSeg = tempoRestanteMateria(si);
-  let base;
-  if(restanteSeg!=null && restanteSeg>0) base = Math.round((restanteSeg/3600)*10)/10;
-  else {
-    const restantePaginas = totalTheoryForSubject(si) - pagesReadForSubject(si);
-    base = restantePaginas<=0 ? 0.1 : Math.round((restantePaginas/20)*10)/10; // sem ritmo registrado ainda: heuristica generica
-  }
-  return Math.round(base*fatorAjusteDesvio(si)*10)/10;
+  if(restanteSeg!=null && restanteSeg>0) return Math.round((restanteSeg/3600)*10)/10;
+  const restantePaginas = totalTheoryForSubject(si) - pagesReadForSubject(si);
+  return restantePaginas<=0 ? 0.1 : Math.round((restantePaginas/20)*10)/10; // sem ritmo registrado ainda: heuristica generica
+}
+// Recalcula os pesos de TODAS as matérias ativas a partir do zero (limpa qualquer override
+// manual feito em "Replanejar") - chamado toda vez que a semana vira (atualizarCicloSemanaManual),
+// pra garantir que o peso sempre reflita o que está pendente AGORA, nunca um valor manual
+// congelado de semanas atrás. Devolve quantas matérias tinham peso manual (pra mensagem ao
+// usuário) - o valor em si não precisa ser escrito de volta em c.pesos: apagar o override é
+// suficiente pra getCicloPeso voltar a usar pesoSugerido(si) (sempre recalculado, dinâmico).
+function recalcularPesosCiclo(){
+  const c = ensureCicloDefaults();
+  if(!c) return 0;
+  const tinhamOverride = Object.keys(c.pesos).filter(siStr=> isSubjectActive(Number(siStr))).length;
+  c.pesos = {};
+  save();
+  return tinhamOverride;
 }
 function getCicloPeso(si){
   const c = ensureCicloDefaults();
@@ -4169,14 +4141,15 @@ function cicloMetaTotalSegundos(){
   if(!c) return 0;
   return SUBJECTS.reduce((sum,s,si)=> sum+cicloMetaSegundos(si), 0);
 }
-/* ===================== HISTÓRICO DE CICLOS + AJUSTE POR DESVIO =====================
+/* ===================== HISTÓRICO DE CICLOS =====================
    Leva de melhorias da tela do Ciclo (ago/2026). Toda vez que um ciclo fecha — automaticamente
    (checkCicloCompletion, todas as matérias bateram a meta) ou manualmente (recomecarCiclo) —
    fica um marco em state.historicoCiclos com o retrato daquele fechamento: datas, % de domínio
-   geral até ali, e o desvio (estudado/meta) de cada matéria ativa. Esse desvio alimenta
-   pesoSugerido() no ciclo seguinte: quem passou muito da meta ganha peso menor, quem ficou
-   muito abaixo ganha peso maior — sempre compondo com arredondar15min (piso 30min, incrementos
-   de 15min), nunca substituindo essa regra. Só ciclos fechados a partir de agora entram nesse
+   geral até ali, e o desvio (estudado/meta) de cada matéria ativa (guardado só como registro
+   histórico, mostrado em "Histórico de ciclos" - ver renderCicloHistorico). Ago/2026: esse
+   desvio deixou de alimentar o peso do ciclo seguinte (fatorAjusteDesvio foi removido, pedido
+   do Bruno) - o peso agora vem só do que está pendente agora, recalculado toda semana (ver
+   pesoSugerido/recalcularPesosCiclo). Só ciclos fechados a partir de agora entram nesse
    histórico — não há como reconstituir os ciclos anteriores, que não eram logados. */
 function registrarHistoricoCiclo(fimTs, completo){
   const c = state.ciclo;
@@ -4203,52 +4176,15 @@ function registrarHistoricoCiclo(fimTs, completo){
   state.historicoCiclos.push(registro);
   return registro;
 }
-// Fator de ajuste de peso pro próximo ciclo, a partir do desvio da matéria no ÚLTIMO ciclo
-// fechado. >20% acima da meta: reduz um pouco a prioridade (precisa de menos reforço). >30%
-// abaixo: aumenta um pouco. Dentro dessa faixa, sem ajuste (1 = neutro).
-function fatorAjusteDesvio(si){
-  // ago/2026: o historico SEMANAL (registrarHistoricoSemana, alimentado pelo botao "Atualizar
-  // ciclo") e mais recente que o historico de CICLO inteiro (que so fecha de tempos em tempos),
-  // entao tem prioridade quando existir dado pra essa materia.
-  const histSemanas = state.historicoSemanas;
-  if(histSemanas && histSemanas.length){
-    const ultimaSemana = histSemanas[histSemanas.length-1];
-    const dSemana = ultimaSemana.desvios ? ultimaSemana.desvios[si] : null;
-    if(dSemana!=null){
-      if(dSemana >= 1.2) return 0.85;
-      if(dSemana <= 0.7) return 1.2;
-      return 1;
-    }
-  }
-  const hist = state.historicoCiclos;
-  if(!hist || !hist.length) return 1;
-  const ultimo = hist[hist.length-1];
-  const d = ultimo.desvios ? ultimo.desvios[si] : null;
-  if(d==null) return 1;
-  if(d >= 1.2) return 0.85;
-  if(d <= 0.7) return 1.2;
-  return 1;
-}
-// Texto do aviso de ajuste automático (mostrado na tela do Ciclo assim que um ciclo fecha —
-// nunca silencioso). Uma linha por matéria efetivamente ajustada; null se nenhuma mexeu.
-function ajustePorDesvioTexto(registro){
-  if(!registro || !registro.desvios) return null;
-  const linhas = [];
-  Object.keys(registro.desvios).forEach(siStr=>{
-    const si = Number(siStr);
-    const d = registro.desvios[si];
-    const nome = SUBJECTS[si].name;
-    if(d >= 1.2){
-      linhas.push(nome+': você estudou '+Math.round((d-1)*100)+'% a mais que o previsto — reduzimos um pouco a prioridade dela no próximo ciclo.');
-    } else if(d <= 0.7){
-      linhas.push(nome+': ficou '+Math.round((1-d)*100)+'% abaixo da meta — aumentamos um pouco a prioridade dela no próximo ciclo.');
-    }
-  });
-  return linhas.length ? linhas : null;
-}
-// Aviso pendente de exibição na tela do Ciclo (linhas do texto acima, ou null). Não é
-// persistido de propósito: some assim que o usuário vê e fecha o banner, ou quando um novo
-// fechamento de ciclo o substitui.
+// ago/2026: existiam aqui fatorAjusteDesvio() e ajustePorDesvioTexto() - um fator que reduzia/
+// aumentava o peso do próximo ciclo com base no desvio (estudado/meta) do ciclo ou da semana
+// anterior, com um banner "Ajuste automático do próximo ciclo" explicando a mudança. Removidos
+// a pedido do Bruno junto com a mecânica de "atraso"/dívida congelada: o peso agora vem só do
+// que está pendente agora (pesoSugerido), recalculado do zero toda semana (ver
+// recalcularPesosCiclo) - sem nenhum ajuste reativo baseado em desempenho passado.
+// Aviso pendente de exibição na tela do Ciclo (linhas de texto, ou null) - infraestrutura do
+// banner acima; sem gerador de texto próprio no momento, então fica sempre null (renderCicloAvisoAjuste
+// simplesmente não desenha nada). Mantido caso um aviso futuro precise reaproveitar o banner.
 let avisoCicloPendente = null;
 function criarCiclo(horasPorSemana){
   state.ciclo = {
@@ -4277,8 +4213,7 @@ function recomecarCiclo(){
   const maxFim = state.sessions.reduce((m,s)=> Math.max(m, s.timestampFim), Date.now());
   // Reinício manual também fecha o ciclo — é o ponto onde "atrasadas" costuma ter conteúdo de
   // verdade (o fechamento automático só acontece quando todas já bateram a meta).
-  const registro = registrarHistoricoCiclo(maxFim, false);
-  avisoCicloPendente = ajustePorDesvioTexto(registro);
+  registrarHistoricoCiclo(maxFim, false);
   c.cicloStartedAt = maxFim+1;
   save();
 }
@@ -4311,8 +4246,7 @@ function checkCicloCompletion(){
     // execucoes muito rapidas (mesmo milissegundo), as sessoes que acabaram de fechar o
     // ciclo ainda contem para o ciclo novo e disparem uma conclusao repetida.
     const maxFim = state.sessions.reduce((m,s)=> Math.max(m, s.timestampFim), c.cicloStartedAt);
-    const registro = registrarHistoricoCiclo(maxFim, true);
-    avisoCicloPendente = ajustePorDesvioTexto(registro);
+    registrarHistoricoCiclo(maxFim, true);
     c.cicloStartedAt = maxFim+1;
     save();
     toast(' Ciclo completo! Um novo ciclo foi iniciado.');
@@ -4331,100 +4265,23 @@ function proximaAulaPendenteMateria(si){
   return s.aulas.length-1;
 }
 
-/* ===================== ATRASOS (Ciclo) =====================
-   ago/2026 (pedido do Bruno, ver regras-sistema-horas.md secao 13): antes, quando o deficit
-   acumulado de uma materia nao cabia no orcamento semanal (horasPorSemana), gerarSemanaCalendario
-   tentava encaixar o maximo possivel na propria semana (distribuirComTeto), e o que sobrava so
-   aparecia como um selo pequeno "nao cabe nesta semana" - um numero recalculado do zero a cada
-   semana, sem historico proprio nem jeito de "quitar" de proposito.
-
-   Agora o atraso vira uma DIVIDA CONGELADA por materia (state.ciclo.atrasos[si], em segundos):
-   toda vez que uma semana fecha de verdade (botao "Atualizar ciclo pra esta semana" - unico
-   momento em que uma semana civil vira a proxima, regra 6), qualquer bloco que ainda estava
-   PENDENTE nela (ver blocosPendentesSemanaSegundos) e somado no atraso da materia
-   (congelarAtrasosDaSemana). A partir dai a semana NOVA e gerada so com o ritmo normal (peso x
-   horasPorSemana - gerarSemanaCalendario nao olha mais deficit acumulado pra decidir quantos
-   blocos dar a cada materia). O atraso fica OUT do orcamento semanal, sem prazo fixo - so
-   diminui quando o usuario escolhe estudar ele de proposito, pela secao "Atrasadas" (aba Ciclo e
-   Painel), que inicia uma sessao normal (mesma materia, conta pra tudo que sempre contou) mas
-   marcada como pagamento de divida (iniciarSessaoAtraso/pagarAtraso). */
-function congelarAtrasosDaSemana(){
-  const c = ensureCalendarioDefaults();
-  const cc = ensureCicloDefaults();
-  if(!c || !cc) return;
-  if(!cc.atrasos) cc.atrasos = {};
-  Metricas.materiasAtivas().forEach(({si})=>{
-    const naoFeito = blocosPendentesSemanaSegundos(si);
-    if(naoFeito>0) cc.atrasos[si] = (cc.atrasos[si]||0) + naoFeito;
-  });
-}
-// Quanto uma materia ainda deve de atraso, em segundos - 0 se nunca atrasou ou ja quitou tudo.
-// Nao mostra atraso de materia que ja bateu a meta da rodada inteira (cicloPct>=100): se o
-// numero geral ja fechou, o atraso antigo virou irrelevante (ver secao acima).
-function atrasoSegundos(si){
-  const cc = ensureCicloDefaults();
-  if(!cc || !cc.atrasos) return 0;
-  if(cicloPct(si)>=100) return 0;
-  return Math.max(0, cc.atrasos[si]||0);
-}
-// Abre o MESMO modal de inicio de sessao usado pelo Calendario (openStartSessionModal - deixa
-// escolher teoria/questoes normalmente), so marcando de proposito (via sessaoAtrasoPendente,
-// lido dentro do clique "Iniciar cronometro" do modal) que a sessao resultante e pagamento de
-// atraso (state.activeSession.pagandoAtraso=true). endActiveSession() abate o tempo estudado do
-// saldo de atrasos[si] quando essa flag esta marcada - ver la.
-function iniciarSessaoAtraso(si){
-  if(state.activeSession){ toast('Encerre a sessão em andamento antes de iniciar outra.'); return; }
-  sessaoAtrasoPendente = true;
-  openStartSessionModal(si, proximaAulaPendenteMateria(si), null); // mesma logica ja usada pelo Calendario (abrirSessaoBloco)
-}
-// Lista de matérias com atraso>0 (maior primeiro) - usada tanto na aba Ciclo (renderCicloAtrasos,
-// sem cabeçalho próprio, ver card "Atrasadas" no HTML) quanto no Painel (renderHibrido, com
-// cabeçalho no estilo dos outros grupos - ver hib-grupo/ciclosPendentesHtml). Retorna '' quando
-// não há nenhuma matéria atrasada, pra quem chama poder esconder o card/seção inteira.
-function buildAtrasadasHtml(comCabecalho){
-  if(!state.ciclo) return '';
-  const itens = Metricas.materiasAtivas()
-    .map(({s,si})=> ({ s, si, atraso: atrasoSegundos(si) }))
-    .filter(x=> x.atraso>0)
-    .sort((a,b)=> b.atraso-a.atraso);
-  if(!itens.length) return '';
-  const header = comCabecalho ? `<div class="hib-grupo">atrasadas · ${itens.length} ${itens.length===1?'matéria':'matérias'}</div>` : '';
-  return header + `<div class="atraso-lista">${itens.map(x=>`
-    <button type="button" class="atraso-item" data-si="${x.si}" title="Iniciar cronômetro dedicado a pagar este atraso">
-      <span class="atraso-nm">${escapeHtml(x.s.name)}</span>
-      <span class="atraso-tempo">${fmtDuracao(x.atraso)}</span>
-      <span class="atraso-acao">Estudar atraso ›</span>
-    </button>`).join('')}</div>`;
-}
-function renderCicloAtrasos(){
-  const wrap = document.getElementById('cicloAtrasos');
-  if(!wrap) return;
-  // ago/2026: o card fica sempre visível (lado a lado com o Ciclo - ver .ciclo-side-row), então
-  // sem nenhum atraso ele mostra um estado vazio em vez de sumir - mesmo padrão de
-  // renderCicloHistorico() pra "nenhum ciclo fechado ainda".
-  const html = buildAtrasadasHtml(false);
-  wrap.innerHTML = html || `<div class="empty">Nenhuma matéria atrasada agora. O que não couber na semana ao apertar "Atualizar ciclo" aparece aqui.</div>`;
-  wrap.querySelectorAll('.atraso-item').forEach(b=>{
-    b.addEventListener('click', ()=> iniciarSessaoAtraso(Number(b.dataset.si)));
-  });
-}
-
 /* ===================== CALENDÁRIO DA SEMANA (Ciclo) =====================
    Visão semanal do Ciclo: a mesma meta de horas por matéria (cicloMetaSegundos)
    distribuída em blocos de 30min ao longo dos 7 dias, que o usuário pode arrastar
    pra reorganizar. Não é um sistema paralelo ao Ciclo — é só outra forma de olhar
    pro mesmo motor (peso, meta, estudado). Guardado em state.calendario.
 
-   Geração da semana (ago/2026, simplificado - ver ATRASOS acima): cada semana nasce
-   SEMPRE com o ritmo normal, proporcional ao peso de cada matéria ativa
-   (horasPorSemana * peso/totalPeso) - não olha mais déficit acumulado pra decidir
-   quantos blocos dar a cada matéria. O que não foi estudado até a virada da semana
-   (botão "Atualizar ciclo pra esta semana") vira ATRASO congelado
-   (state.ciclo.atrasos[si] - ver congelarAtrasosDaSemana), por fora deste orçamento
-   semanal, sem prazo fixo - só é pago via a sessão dedicada "Estudar atraso" (seção
-   "Atrasadas"). Uma vez gerada, a semana NÃO se regenera sozinha em cada render (isso
-   apagaria os arrastos manuais do usuário) - só quando a segunda-feira vira (ver
-   checkCalendarioRollover). */
+   Geração da semana: cada semana nasce SEMPRE proporcional ao peso de cada matéria
+   ativa (horasPorSemana * peso/totalPeso), e o peso em si é recalculado do zero a cada
+   virada de semana a partir do que ainda está pendente (ver pesoSugerido/
+   recalcularPesosCiclo/atualizarCicloSemanaManual - pedido do Bruno, ago/2026: "toda
+   semana os pesos devem ser recalculados de acordo com o que ainda está pendente, pra
+   que as matérias terminem juntas, dentro do possível, na data alvo"). Não existe mais
+   nenhuma mecânica de "atraso"/dívida separada - o que não foi estudado numa semana
+   simplesmente aumenta o pendente daquela matéria, que puxa um peso maior (proporcional)
+   na semana seguinte, sempre dentro do MESMO orçamento semanal (horasPorSemana). Uma vez
+   gerada, a semana NÃO se regenera sozinha em cada render (isso apagaria os arrastos
+   manuais do usuário) - só quando a segunda-feira vira (ver checkCalendarioRollover). */
 const DIAS_SEMANA = ['seg','ter','qua','qui','sex','sab','dom'];
 const DIAS_SEMANA_LABEL = { seg:'Seg', ter:'Ter', qua:'Qua', qui:'Qui', sex:'Sex', sab:'Sáb', dom:'Dom' };
 // Segunda-feira (YYYY-MM-DD) da semana que contém dataStr.
@@ -4438,15 +4295,18 @@ function segundaFeiraDe(dataStr){
 // Sobe esse numero sempre que a logica de geracao da semana (decomporMateriaEmItens,
 // distribuirInteiros, etc) mudar de um jeito que invalida semanas ja geradas - forca uma
 // regeneracao automatica (unica, sem botao) na proxima visita, mesmo sem virar a segunda.
-// v4 (ago/2026): geracao deixou de olhar deficit acumulado (ver ATRASOS) - semanas geradas
-// pela v3 podiam ter blocos "encolhidos" por causa do teto do deficit, que nao existe mais.
+// v4 (ago/2026): geracao deixou de olhar deficit acumulado - semanas geradas pela v3 podiam
+// ter blocos "encolhidos" por causa do teto do deficit, que nao existe mais.
 // v5 (ago/2026, bug reportado pelo Bruno): a v4 usava distribuirInteiros puro pra dividir a
 // semana por peso - com pesos muito desiguais (materia quase concluida com peso sugerido tipo
 // 0,1 ao lado de outras com peso 8+), a cota de uma materia podia arredondar pra 0 unidades e
 // ela sumia da semana inteira, mesmo tendo peso>0. distribuirComPiso garante um minimo de 30min
-// por materia com peso>0 (ver comentario dela) - nao tem nenhuma relacao com atraso/divida, que
-// continua 100% separado (secao "Atrasadas").
-const CALENDARIO_ALGO_VERSION = 5;
+// por materia com peso>0 (ver comentario dela).
+// v6 (ago/2026, pedido do Bruno): removida a mecanica de "atraso"/divida congelada por
+// materia - o peso volta a ser recalculado do zero toda semana a partir do que esta
+// pendente agora (ver pesoSugerido/recalcularPesosCiclo), sem nenhum saldo separado por
+// fora do orcamento semanal.
+const CALENDARIO_ALGO_VERSION = 6;
 function ensureCalendarioDefaults(){
   if(!state.calendario) state.calendario = { semanaRef:null, blocos:{}, diasPeso:null, algoVersion:null };
   const c = state.calendario;
@@ -4484,9 +4344,7 @@ function distribuirInteiros(pesos, total){
 // semana inteira, mesmo tendo peso>0 e ainda precisando de tempo. distribuirComPiso garante um
 // PISO mínimo (pisoUnid, em unidades de 15min) pra cada matéria com peso>0 antes de distribuir o
 // resto proporcionalmente - mesmo espírito do piso de 30min de cicloMetaSegundos/arredondar15min,
-// só que aplicado à distribuição da semana, não só ao cálculo da meta. Isso é só sobre a matemática
-// da distribuição por peso - não tem nenhuma relação com atraso/dívida (ver ATRASOS acima), que
-// continua inteiramente separado, na sua própria seção "Atrasadas".
+// só que aplicado à distribuição da semana, não só ao cálculo da meta.
 function distribuirComPiso(pesos, pisoUnid, total){
   const chaves = Object.keys(pesos).filter(k=>pesos[k]>0);
   const out = {};
@@ -4571,8 +4429,8 @@ function gerarSemanaCalendario(forcar){
     return;
   }
   const totalUnid15 = Math.max(0, Math.round(cc.horasPorSemana*4)); // unidades de 15min na semana toda (orcamento nominal, baseado em horasPorSemana)
-  // Base de distribuicao entre materias: sempre proporcional ao peso (ver ATRASOS acima) -
-  // deficit acumulado nao entra mais aqui, so vira "atraso" congelado por fora deste orcamento.
+  // Base de distribuicao entre materias: sempre proporcional ao peso, que por sua vez e'
+  // recalculado toda semana a partir do que esta pendente (ver pesoSugerido/recalcularPesosCiclo).
   let baseMaterias = {};
   Metricas.materiasAtivas().forEach(({si})=>{ if(getCicloPeso(si)>0) baseMaterias[si]=getCicloPeso(si); });
   if(Object.keys(baseMaterias).length===0 || totalUnid15<=0){
@@ -4646,15 +4504,14 @@ function calendarioDesatualizado(){
   const c = ensureCalendarioDefaults();
   return !!c.semanaRef && c.semanaRef!==segundaFeiraDe(todayStr());
 }
-/* ===================== HISTORICO SEMANAL (ajuste de peso semana a semana) =====================
-   Espelha registrarHistoricoCiclo/fatorAjusteDesvio (que so rodam quando um CICLO inteiro
-   fecha, podendo levar varias semanas), mas na granularidade de UMA semana - eh o que alimenta
-   o "reajustar pesos" do botao "Atualizar ciclo" (opcao escolhida pelo Bruno: o botao regenera
-   os blocos da semana E reajusta os pesos das materias sem override manual, com base em como
-   foi a semana que terminou). Chamado por atualizarCicloSemanaManual() ANTES de
-   gerarSemanaCalendario() regenerar c.blocos/c.semanaRef, pra registrar o desvio da semana que
-   esta terminando (planejado = soma da duracao de todos os blocos daquela materia na semana;
-   estudado = soma real das sessoes daquela materia dentro do intervalo da semana). */
+/* ===================== HISTORICO SEMANAL =====================
+   Registra, a cada "Atualizar ciclo", o desvio (estudado/planejado) da semana que está
+   terminando - planejado = soma da duração de todos os blocos daquela matéria na semana;
+   estudado = soma real das sessões daquela matéria dentro do intervalo da semana. Ago/2026:
+   esse desvio é guardado só como dado histórico (state.historicoSemanas) - deixou de
+   influenciar o peso da semana seguinte (o antigo fatorAjusteDesvio foi removido a pedido do
+   Bruno; o peso agora vem só do que está pendente agora, ver pesoSugerido/recalcularPesosCiclo,
+   ambos chamados por atualizarCicloSemanaManual). */
 function registrarHistoricoSemana(){
   const c = ensureCalendarioDefaults();
   if(!c.semanaRef) return null;
@@ -4686,34 +4543,24 @@ function registrarHistoricoSemana(){
 }
 // Mesma redacao de ajustePorDesvioTexto, mas pra um registro SEMANAL (evita a frase "no
 // proximo ciclo", que ficaria errada aqui).
-function ajusteSemanaTexto(registro){
-  if(!registro || !registro.desvios) return null;
-  const linhas = [];
-  Object.keys(registro.desvios).forEach(siStr=>{
-    const si = Number(siStr);
-    const d = registro.desvios[si];
-    const nome = SUBJECTS[si].name;
-    if(d >= 1.2){
-      linhas.push(nome+': você estudou '+Math.round((d-1)*100)+'% a mais que o planejado na semana passada — reduzimos um pouco a prioridade dela nesta semana.');
-    } else if(d <= 0.7){
-      linhas.push(nome+': ficou '+Math.round((1-d)*100)+'% abaixo do planejado na semana passada — aumentamos um pouco a prioridade dela nesta semana.');
-    }
-  });
-  return linhas.length ? linhas : null;
-}
+// ago/2026: existia aqui ajusteSemanaTexto() - texto do banner "peso ajustado" a partir do
+// desvio (estudado/planejado) da semana que fechou. Removido junto com fatorAjusteDesvio: o
+// peso não reage mais ao desvio da semana passada, só ao que está pendente agora (ver
+// pesoSugerido/recalcularPesosCiclo). registrarHistoricoSemana() continua rodando (guarda o
+// desvio como dado histórico, sem efeito no peso) - ver comentário dela.
 // Clique no botao "Atualizar ciclo" (so visivel quando calendarioDesatualizado()). Ordem
-// importa: registra o desvio da semana que esta terminando ANTES de gerarSemanaCalendario
-// sobrescrever c.blocos/c.semanaRef - so depois disso os pesos sugeridos (pesoSugerido/
-// fatorAjusteDesvio) refletem o ajuste, e a regeneracao dos blocos ja usa os pesos novos.
+// importa: registrarHistoricoSemana/recalcularPesosCiclo rodam ANTES de gerarSemanaCalendario
+// sobrescrever c.blocos/c.semanaRef - a semana nova ja nasce com os pesos recem-recalculados.
 function atualizarCicloSemanaManual(){
-  const registro = registrarHistoricoSemana();
-  congelarAtrasosDaSemana(); // precisa rodar ANTES de gerarSemanaCalendario sobrescrever c.blocos - eh o unico momento em que os blocos ainda pendentes desta semana viram atraso (ver ATRASOS)
+  registrarHistoricoSemana();
+  const nRecalculadas = recalcularPesosCiclo();
   gerarSemanaCalendario(true);
   renderPlanejamento();
-  const ajuste = ajusteSemanaTexto(registro);
-  toast(ajuste
-    ? `Ciclo atualizado pra esta semana. Peso ajustado em ${ajuste.length} matéria${ajuste.length===1?'':'s'} (veja em Replanejar).`
-    : 'Ciclo atualizado pra esta semana.');
+  toast(nRecalculadas>0
+    ? (nRecalculadas===1
+        ? 'Ciclo atualizado pra esta semana. Pesos recalculados com base no que ainda está pendente (1 matéria voltou a ser automática).'
+        : `Ciclo atualizado pra esta semana. Pesos recalculados com base no que ainda está pendente (${nRecalculadas} matérias voltaram a ser automáticas).`)
+    : 'Ciclo atualizado pra esta semana. Pesos recalculados com base no que ainda está pendente.');
 }
 /* ===================== SINCRONIA DO CALENDARIO COM QUALQUER SESSAO (ago/2026) =====================
    Bug reportado pelo Bruno: estudar uma materia pela aba Materia (fora do fluxo "clicar num
@@ -4814,17 +4661,6 @@ function blocoFaltaSegundos(dia, idx, b){
     return Math.max(0, precisa-disp);
   }
   return precisa;
-}
-// Soma (em segundos) dos blocos AINDA PENDENTES desta materia na semana em exibicao - usada
-// pelo selo de "backlog" na Sequencia de Estudos (ver renderCicloSequencia). Nao conta bloco
-// ja concluido, porque esse tempo ja foi "gasto" e nao representa mais compromisso da semana.
-function blocosPendentesSemanaSegundos(si){
-  const c = ensureCalendarioDefaults();
-  let total = 0;
-  DIAS_SEMANA.forEach(d=>{
-    (c.blocos[d]||[]).forEach(b=>{ if(b.si===si && !b.done) total += (b.duracaoMin||30)*60; });
-  });
-  return total;
 }
 // Move um bloco de (fromDia,fromIdx) pra (toDia,toIdx) - usado pelo arrastar-e-soltar.
 function moveCalendarBlock(fromDia, fromIdx, toDia, toIdx){
@@ -4929,7 +4765,7 @@ function nivelLabel(n){ return NIVEL_LABELS[n] || n; }
 const EXTRA_TIPS = {
   peso_ciclo_sugerido: {
     titulo: 'Como o peso sugerido é calculado',
-    tooltip: 'O peso sugerido de cada matéria é proporcional ao tempo que falta pra terminar de ler a teoria dela (páginas restantes ÷ seu ritmo de leitura naquela matéria). Assim, uma matéria com o dobro do tempo restante de outra recebe o dobro do peso — e, dentro do ciclo, o dobro das horas semanais. O efeito matemático: seguindo o ciclo à risca, todas as matérias ativas tendem a terminar a teoria perto da mesma data, em vez de uma ficar pra trás. Sem sessões suficientes ainda para calcular um ritmo, o app usa uma estimativa genérica baseada só nas páginas restantes. Você pode sobrescrever o valor sugerido a qualquer momento digitando o seu próprio peso — nesse caso ele fica fixo (não muda mais sozinho) até você clicar em "usar sugestão" de novo. O tempo semanal que esse peso vira dentro do ciclo tem piso de 30min por matéria e sempre fecha em múltiplos de 15min (30min, 45min, 1h, 1h15…) — nunca uma fração como "37min".'
+    tooltip: 'O peso sugerido de cada matéria é proporcional ao tempo que falta pra terminar de ler a teoria dela (páginas restantes ÷ seu ritmo de leitura naquela matéria). Assim, uma matéria com o dobro do tempo restante de outra recebe o dobro do peso — e, dentro do ciclo, o dobro das horas semanais. O efeito matemático: seguindo o ciclo à risca, todas as matérias ativas tendem a terminar a teoria perto da mesma data, em vez de uma ficar pra trás — veja "Ritmo até a data alvo", no card do Ciclo, pra comparar com a data que você escolheu em Metas. Sem sessões suficientes ainda para calcular um ritmo, o app usa uma estimativa genérica baseada só nas páginas restantes. Você pode sobrescrever o valor sugerido a qualquer momento digitando o seu próprio peso — nesse caso ele fica fixo até a PRÓXIMA vez que você apertar "Atualizar ciclo pra esta semana": a virada de semana sempre recalcula os pesos do zero a partir do que está pendente naquele momento, mesmo os que foram ajustados manualmente. O tempo semanal que esse peso vira dentro do ciclo tem piso de 30min por matéria e sempre fecha em múltiplos de 15min (30min, 45min, 1h, 1h15…) — nunca uma fração como "37min".'
   },
   meta_data_alvo: {
     titulo: 'Meta por data alvo',
@@ -6312,14 +6148,10 @@ function renderHibrido(){
       ${reguaDominioHtml(d.pct)}
       <div class="hib-apoio">${apoio}</div>
     </div>`) + `
-    ${ciclosPendentesHtml()}
-    ${buildAtrasadasHtml(true)}`;
+    ${ciclosPendentesHtml()}`;
 
   box.querySelectorAll('.ciclo-pend-item').forEach(b=>{
     b.addEventListener('click', ()=> openSubjectTab(Number(b.dataset.si)));
-  });
-  box.querySelectorAll('.atraso-item').forEach(b=>{
-    b.addEventListener('click', ()=> iniciarSessaoAtraso(Number(b.dataset.si)));
   });
 }
 
@@ -9635,11 +9467,6 @@ document.querySelectorAll('#stovModes .stov-mode-btn').forEach(btn=>{
   });
 });
 
-// ago/2026: setado por iniciarSessaoAtraso (aba Ciclo/Painel, secao "Atrasadas") antes de abrir
-// este modal, e lido/zerado no clique "Iniciar cronometro" abaixo - marca a sessao criada como
-// pagamento de atraso (state.activeSession.pagandoAtraso), sem duplicar a logica do modal so
-// pra essa flag. Sempre zerado tambem ao fechar sem iniciar (closeStartSessionModal).
-let sessaoAtrasoPendente = false;
 function openStartSessionModal(si, ai, calendarRef){
   if(state.activeSession){ toast('Encerre a sessão em andamento antes de iniciar outra.'); return; }
   const body = document.getElementById('startSessionBody');
@@ -9662,22 +9489,18 @@ function openStartSessionModal(si, ai, calendarRef){
     });
   });
   document.getElementById('startSessionGo').addEventListener('click', ()=>{
-    const pagandoAtraso = sessaoAtrasoPendente;
-    sessaoAtrasoPendente = false;
     if(startSession(si, ai, tipoSel)){
       activeSessionCalendarRef = calendarRef || null;
-      if(pagandoAtraso) state.activeSession.pagandoAtraso = true;
     }
     closeStartSessionModal();
     renderTimerBar(); // abre a tela central do cronômetro (experiência principal)
     renderAll();
-    toast(pagandoAtraso ? 'Cronômetro iniciado (pagando atraso de '+SUBJECTS[si].name+')' : 'Cronômetro iniciado');
+    toast('Cronômetro iniciado');
   });
   document.getElementById('startSessionOverlay').classList.add('show');
 }
 function closeStartSessionModal(){
   document.getElementById('startSessionOverlay').classList.remove('show');
-  sessaoAtrasoPendente = false;
 }
 document.getElementById('startSessionClose').addEventListener('click', closeStartSessionModal);
 
@@ -10057,6 +9880,45 @@ function renderCicloAvisoAjuste(){
     renderCicloAvisoAjuste();
   });
 }
+// ago/2026 (pedido do Bruno, ver pesoSugerido/recalcularPesosCiclo): com o peso sempre
+// proporcional ao que está pendente, todas as matérias ativas terminam (na teoria) juntas -
+// no mesmo número de semanas, qualquer que seja esse número. Esse badge existe pra dar
+// visibilidade a ESSE número: quantas semanas faltam no ritmo atual (horasPorSemana) pra
+// zerar tudo que está pendente, e como isso se compara com a "data alvo" que o usuário já
+// configura na aba Metas (state.metaDataAlvo, ver renderMetaDataAlvo) - a mesma data, só que
+// aqui aplicada ao conjunto de matérias do Ciclo, não a páginas/questões soltas. Não altera
+// horasPorSemana sozinho: só informa, pra o usuário decidir se ajusta o ritmo em Replanejar.
+function renderCicloRitmoAlvo(){
+  const wrap = document.getElementById('cicloRitmoAlvo');
+  if(!wrap) return;
+  const c = state.ciclo;
+  if(!c || !c.horasPorSemana){ wrap.innerHTML = ''; return; }
+  let totalPendenteHoras = 0;
+  Metricas.materiasAtivas().forEach(({si})=>{ totalPendenteHoras += pesoSugerido(si); });
+  if(totalPendenteHoras<=0){
+    wrap.innerHTML = `<div class="meta-alvo-block"><div class="lbl">Ritmo até a data alvo</div><div class="sub">Nada pendente nas matérias ativas do ciclo agora.</div></div>`;
+    return;
+  }
+  const semanasNecessarias = totalPendenteHoras/c.horasPorSemana;
+  const semanasArred = Math.ceil(semanasNecessarias);
+  const dataPrevistaLbl = fmtDate(addDays(todayStr(), semanasArred*7));
+  let comparacaoHtml;
+  if(state.metaDataAlvo){
+    const dias = Math.max(1, Math.round((new Date(state.metaDataAlvo+"T00:00:00") - new Date(todayStr()+"T00:00:00")) / 86400000));
+    const folgaSemanas = Math.round((dias/7 - semanasNecessarias)*10)/10;
+    const dataAlvoLbl = fmtDate(state.metaDataAlvo);
+    if(Math.abs(folgaSemanas)<0.3) comparacaoHtml = `<span class="meta-alvo-folga neutro">no fio: bate a data alvo (${dataAlvoLbl}) certinho</span>`;
+    else if(folgaSemanas>0) comparacaoHtml = `<span class="meta-alvo-folga folga">+${folgaSemanas} semana${folgaSemanas===1?'':'s'} de folga até a data alvo (${dataAlvoLbl})</span>`;
+    else comparacaoHtml = `<span class="meta-alvo-folga atraso">${Math.abs(folgaSemanas)} semana${Math.abs(folgaSemanas)===1?'':'s'} além da data alvo (${dataAlvoLbl})</span>`;
+  } else {
+    comparacaoHtml = `<span class="meta-alvo-folga neutro">defina uma data alvo na aba Metas pra comparar</span>`;
+  }
+  wrap.innerHTML = `<div class="meta-alvo-block">
+    <div class="lbl">Ritmo até a data alvo</div>
+    <div class="sub">Faltam ~${Math.round(totalPendenteHoras*10)/10}h no total das matérias ativas do ciclo. No ritmo atual (${c.horasPorSemana}h/semana), termina em ~${semanasArred} semana${semanasArred===1?'':'s'} (${dataPrevistaLbl}).</div>
+    ${comparacaoHtml}
+  </div>`;
+}
 // Linha do tempo de ciclos fechados (mais recente primeiro). Cada marco é clicável e
 // expande pra mostrar os detalhes daquele fechamento (ver registrarHistoricoCiclo).
 let cicloHistoricoAbertoId = null;
@@ -10123,7 +9985,7 @@ function renderPlanejamento(){
 
   renderCicloSequencia();
   renderCicloAvisoAjuste();
-  renderCicloAtrasos();
+  renderCicloRitmoAlvo();
   renderCicloHistorico();
   renderCalendario();
 }
