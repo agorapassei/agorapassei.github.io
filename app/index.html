@@ -4063,8 +4063,10 @@ function setSubjectActive(si, ativa){
 // pesoEfetivoCiclo() logo abaixo, não esta função direto - ver o comentário dela pro motivo.
 // Matematicamente, distribuir o orcamento semanal proporcional ao que falta de cada materia
 // faz todas convergirem pro mesmo numero de semanas até zerar (ver renderCicloRitmoAlvo pra
-// comparação com a data alvo escolhida em Metas). Piso de 30min/incrementos de 15min continuam
-// só em arredondar15min (cicloMetaSegundos) e em distribuirComPiso (Calendário da Semana).
+// comparação com a data alvo escolhida em Metas). Piso de 30min/incrementos de 15min vêm de
+// arredondar15min, dentro de cicloMetaSegundos - o Calendário da Semana usa essa MESMA meta
+// (ver gerarSemanaCalendario), então o piso se propaga pra lá também, sem precisar de uma
+// segunda distribuição própria.
 function pesoSugerido(si){
   const restanteSeg = tempoRestanteMateria(si);
   if(restanteSeg!=null && restanteSeg>0) return Math.round((restanteSeg/3600)*10)/10;
@@ -4308,17 +4310,20 @@ function proximaAulaPendenteMateria(si){
    pra reorganizar. Não é um sistema paralelo ao Ciclo — é só outra forma de olhar
    pro mesmo motor (peso, meta, estudado). Guardado em state.calendario.
 
-   Geração da semana: cada semana nasce SEMPRE proporcional ao peso de cada matéria
-   ativa (horasPorSemana * peso/totalPeso), e o peso em si é recalculado do zero a cada
-   virada de semana a partir do que ainda está pendente (ver pesoSugerido/
-   recalcularPesosCiclo/atualizarCicloSemanaManual - pedido do Bruno, ago/2026: "toda
-   semana os pesos devem ser recalculados de acordo com o que ainda está pendente, pra
-   que as matérias terminem juntas, dentro do possível, na data alvo"). Não existe mais
-   nenhuma mecânica de "atraso"/dívida separada - o que não foi estudado numa semana
-   simplesmente aumenta o pendente daquela matéria, que puxa um peso maior (proporcional)
-   na semana seguinte, sempre dentro do MESMO orçamento semanal (horasPorSemana). Uma vez
-   gerada, a semana NÃO se regenera sozinha em cada render (isso apagaria os arrastos
-   manuais do usuário) - só quando a segunda-feira vira (ver checkCalendarioRollover). */
+   Geração da semana: os minutos de cada matéria na semana vêm DIRETO de
+   cicloMetaSegundos(si) - a MESMA meta (mesmo arredondamento) que a Sequência de Estudos
+   mostra pra rodada, garantindo que as duas telas sempre batem pro mesmo número (ver
+   gerarSemanaCalendario). Essa meta, por sua vez, vem do peso de cada matéria (congelado
+   por rodada - ver pesoEfetivoCiclo), que é recalculado do zero a cada virada de semana a
+   partir do que ainda está pendente (ver pesoSugerido/recalcularPesosCiclo/
+   atualizarCicloSemanaManual - pedido do Bruno, ago/2026: "toda semana os pesos devem ser
+   recalculados de acordo com o que ainda está pendente, pra que as matérias terminem
+   juntas, dentro do possível, na data alvo"). Não existe mais nenhuma mecânica de
+   "atraso"/dívida separada - o que não foi estudado numa semana simplesmente aumenta o
+   pendente daquela matéria, que puxa um peso maior (proporcional) na semana seguinte,
+   sempre dentro do MESMO orçamento semanal (horasPorSemana). Uma vez gerada, a semana NÃO
+   se regenera sozinha em cada render (isso apagaria os arrastos manuais do usuário) - só
+   quando a segunda-feira vira (ver checkCalendarioRollover). */
 const DIAS_SEMANA = ['seg','ter','qua','qui','sex','sab','dom'];
 const DIAS_SEMANA_LABEL = { seg:'Seg', ter:'Ter', qua:'Qua', qui:'Qui', sex:'Sex', sab:'Sáb', dom:'Dom' };
 // Segunda-feira (YYYY-MM-DD) da semana que contém dataStr.
@@ -4343,7 +4348,14 @@ function segundaFeiraDe(dataStr){
 // materia - o peso volta a ser recalculado do zero toda semana a partir do que esta
 // pendente agora (ver pesoSugerido/recalcularPesosCiclo), sem nenhum saldo separado por
 // fora do orcamento semanal.
-const CALENDARIO_ALGO_VERSION = 6;
+// v7 (ago/2026, bug reportado pelo Bruno - "por que o que falta nao bate com a semana"):
+// a v6 ainda distribuia a semana com um orcamento e arredondamento PROPRIOS
+// (distribuirComPiso sobre horasPorSemana*4), separados da conta que gera a meta da
+// rodada (cicloMetaSegundos) - as duas quase nunca fechavam exatamente no mesmo numero
+// pra uma materia, mesmo saindo do mesmo peso. A v7 gera os minutos de cada materia DIRETO
+// de cicloMetaSegundos(si), eliminando essa segunda conta - a semana sempre bate com a
+// meta que a Sequencia de Estudos mostra.
+const CALENDARIO_ALGO_VERSION = 7;
 function ensureCalendarioDefaults(){
   if(!state.calendario) state.calendario = { semanaRef:null, blocos:{}, diasPeso:null, algoVersion:null };
   const c = state.calendario;
@@ -4375,32 +4387,17 @@ function distribuirInteiros(pesos, total){
   chaves.forEach(k=> out[k]=info[k].inteiro);
   return out;
 }
-// ago/2026 (bug reportado pelo Bruno): distribuirInteiros puro, com pesos muito desiguais (ex.:
-// matéria quase concluída com peso sugerido 0,1 convivendo com outras de peso 8+), podia arredondar
-// a cota de uma matéria pra 0 unidades inteiras - ela simplesmente sumia do Calendário da Semana a
-// semana inteira, mesmo tendo peso>0 e ainda precisando de tempo. distribuirComPiso garante um
-// PISO mínimo (pisoUnid, em unidades de 15min) pra cada matéria com peso>0 antes de distribuir o
-// resto proporcionalmente - mesmo espírito do piso de 30min de cicloMetaSegundos/arredondar15min,
-// só que aplicado à distribuição da semana, não só ao cálculo da meta.
-function distribuirComPiso(pesos, pisoUnid, total){
-  const chaves = Object.keys(pesos).filter(k=>pesos[k]>0);
-  const out = {};
-  if(chaves.length===0 || total<=0){ chaves.forEach(k=>out[k]=0); return out; }
-  const somaPisos = chaves.length*pisoUnid;
-  if(total<somaPisos){
-    // orçamento não dá nem pro piso de todo mundo (poucas horas/semana pra muitas matérias
-    // ativas) - melhor esforço, cai pra proporcional puro (mesmo risco de sumiço, mas não tem
-    // como garantir um mínimo pra todos sem estourar o total configurado).
-    return distribuirInteiros(pesos, total);
-  }
-  chaves.forEach(k=> out[k]=pisoUnid);
-  const restante = total-somaPisos;
-  if(restante>0){
-    const extra = distribuirInteiros(pesos, restante);
-    chaves.forEach(k=> out[k]+=(extra[k]||0));
-  }
-  return out;
-}
+// ago/2026: existiu aqui distribuirComPiso(pesos, pisoUnid, total) - redistribuía um orçamento
+// NOMINAL da semana (horasPorSemana*4 unidades de 15min) entre as matérias proporcional ao peso,
+// com um piso mínimo pra nenhuma sumir por arredondamento. Removida em 22/08/2026 (bug reportado
+// pelo Bruno: "por que o que falta não bate com a semana") - o problema de fundo era ter DUAS
+// contas de arredondamento independentes sobre o mesmo peso/totalPeso: uma pra meta da rodada
+// (cicloMetaSegundos, mostrada na Sequência de Estudos) e outra pra distribuição da semana
+// (distribuirComPiso, mostrada no Calendário) - as duas quase nunca fechavam no mesmo número por
+// matéria, mesmo vindo do mesmo peso. Ver gerarSemanaCalendario logo abaixo: agora os minutos de
+// cada matéria na semana vêm DIRETO de cicloMetaSegundos(si) - a MESMA conta da Sequência de
+// Estudos - então as duas telas sempre batem, e o piso de 30min já vem de graça (arredondar15min,
+// dentro de cicloMetaSegundos, já garante isso pra qualquer matéria com peso>0).
 // Converte os minutos totais que uma matéria recebeu na semana numa lista de ITENS pra
 // intercalar. Todo bloco é de 30min ou 45min - nunca 15 nem 60. Por padrão os blocos de 30min
 // vêm agrupados em PARES (2 blocos de 30min da mesma matéria, lado a lado = 1h). Quando os
@@ -4447,12 +4444,21 @@ function intercalarItensPorMateria(itensPorMateria){
   }
   return out;
 }
-// Piso mínimo garantido por matéria na distribuição da semana - 2 unidades de 15min = 30min,
-// o mesmo bloco mínimo que decomporMateriaEmItens já exige pra não descartar a matéria inteira
-// (ver distribuirComPiso acima).
-const PISO_SEMANA_UNID15 = 2;
-// Gera (ou regenera, se forcar=true) o conteúdo da semana atual, sempre proporcional ao peso
-// de cada matéria ativa no ciclo. Ver comentário da seção acima pra lógica completa.
+// Gera (ou regenera, se forcar=true) o conteúdo da semana atual. Ver comentário da seção acima
+// pra lógica completa.
+//
+// ago/2026 (bug reportado pelo Bruno, "por que o que falta não bate com a semana"): os minutos
+// de cada matéria na semana vêm DIRETO de cicloMetaSegundos(si) - a MESMA função que
+// renderCicloSequencia usa pra mostrar a meta da rodada. Antes, a semana tinha seu PRÓPRIO
+// orçamento nominal (horasPorSemana*4 unidades de 15min) redistribuído entre matérias por peso
+// via distribuirComPiso - uma segunda conta de arredondamento, independente de
+// cicloMetaSegundos, sobre o mesmo peso/totalPeso. As duas quase nunca fechavam no mesmo número
+// pra uma matéria (cada uma arredondava um jeito), daí o Calendário mostrar menos minutos pra
+// uma matéria do que a meta que a Sequência de Estudos anunciava pra ela mesma, na mesma semana.
+// Derivar direto de cicloMetaSegundos elimina a segunda conta: as duas telas sempre batem, e o
+// piso de 30min por matéria (antes garantido à parte por distribuirComPiso) já vem de graça,
+// porque arredondar15min (chamada dentro de cicloMetaSegundos) já nunca devolve menos que 30min
+// pra qualquer matéria com peso>0.
 function gerarSemanaCalendario(forcar){
   const c = ensureCalendarioDefaults();
   const segunda = segundaFeiraDe(todayStr());
@@ -4465,23 +4471,18 @@ function gerarSemanaCalendario(forcar){
     save();
     return;
   }
-  const totalUnid15 = Math.max(0, Math.round(cc.horasPorSemana*4)); // unidades de 15min na semana toda (orcamento nominal, baseado em horasPorSemana)
-  // Base de distribuicao entre materias: sempre proporcional ao peso, que por sua vez e'
-  // recalculado toda semana a partir do que esta pendente (ver pesoSugerido/recalcularPesosCiclo).
-  let baseMaterias = {};
-  Metricas.materiasAtivas().forEach(({si})=>{ if(getCicloPeso(si)>0) baseMaterias[si]=getCicloPeso(si); });
-  if(Object.keys(baseMaterias).length===0 || totalUnid15<=0){
+  const itensPorMateria = {};
+  Metricas.materiasAtivas().forEach(({si})=>{
+    if(getCicloPeso(si)<=0) return;
+    const minutosMateria = Math.round(cicloMetaSegundos(si)/60); // mesma meta da Sequência de Estudos, em minutos
+    const lista = decomporMateriaEmItens(si, minutosMateria);
+    if(lista.length) itensPorMateria[si] = lista;
+  });
+  if(Object.keys(itensPorMateria).length===0){
     DIAS_SEMANA.forEach(d=> c.blocos[d]=[]);
     save();
     return;
   }
-  const unid15PorMateria = distribuirComPiso(baseMaterias, PISO_SEMANA_UNID15, totalUnid15);
-  const itensPorMateria = {};
-  Object.keys(unid15PorMateria).forEach(siStr=>{
-    const minutosMateria = unid15PorMateria[siStr]*15;
-    const lista = decomporMateriaEmItens(Number(siStr), minutosMateria);
-    if(lista.length) itensPorMateria[siStr] = lista;
-  });
   const sequenciaItens = intercalarItensPorMateria(itensPorMateria); // array de {si, qtd, min}
   let diasPeso = {};
   DIAS_SEMANA.forEach(d=>{ if((c.diasPeso[d]||0)>0) diasPeso[d]=c.diasPeso[d]; });
