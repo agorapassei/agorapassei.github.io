@@ -4027,6 +4027,7 @@ function ensureCicloDefaults(){
   const c = state.ciclo;
   if(!c) return null;
   if(!c.pesos) c.pesos = {};
+  if(!c.pesoSnapshot) c.pesoSnapshot = {}; // ver pesoEfetivoCiclo() - peso "congelado" da rodada atual
   if(!c.materiasAtivas) c.materiasAtivas = {};
   if(!c.ordem || c.ordem.length!==SUBJECTS.length) c.ordem = SUBJECTS.map((s,si)=>si);
   if(c.ciclosCompletos===undefined) c.ciclosCompletos = 0;
@@ -4046,6 +4047,7 @@ function setSubjectActive(si, ativa){
   const c = ensureCicloDefaults();
   if(!c) return;
   c.materiasAtivas[si] = !!ativa;
+  if(ativa) delete c.pesoSnapshot[si]; // reativada: congela o pendente ATUAL, nao um valor antigo
   save();
 }
 // Peso sugerido (ago/2026, redesenhado - retirada a mecanica de "atraso"/divida congelada,
@@ -4054,29 +4056,60 @@ function setSubjectActive(si, ativa){
 // proporcional SOMENTE ao tempo estimado que falta pra terminar a materia (paginas que faltam
 // x ritmo de leitura efetivo, ou tempoRestanteMateria quando ja ha ritmo suficiente medido).
 // Nao ha mais nenhum fator de ajuste por desempenho passado (o antigo fatorAjusteDesvio foi
-// removido) - o peso reflete só o que falta AGORA, recalculado do zero toda semana (ver
-// recalcularPesosCiclo/atualizarCicloSemanaManual). Matematicamente, distribuir o orcamento
-// semanal proporcional ao que falta de cada materia faz todas convergirem pro mesmo numero de
-// semanas até zerar (ver renderCicloRitmoAlvo pra comparação com a data alvo escolhida em
-// Metas). Piso de 30min/incrementos de 15min continuam só em arredondar15min (cicloMetaSegundos)
-// e em distribuirComPiso (Calendário da Semana).
+// removido) - o peso reflete só o que falta AGORA. É uma função "ao vivo" (sempre calcula na
+// hora, nunca olha pra um valor salvo) - de propósito, porque a tela de Replanejar e o badge
+// "Ritmo até a data alvo" precisam do valor mais atual possível pra mostrar ao usuário. Quem
+// precisa de um valor ESTÁVEL durante a rodada (a meta de cada matéria no Ciclo) usa
+// pesoEfetivoCiclo() logo abaixo, não esta função direto - ver o comentário dela pro motivo.
+// Matematicamente, distribuir o orcamento semanal proporcional ao que falta de cada materia
+// faz todas convergirem pro mesmo numero de semanas até zerar (ver renderCicloRitmoAlvo pra
+// comparação com a data alvo escolhida em Metas). Piso de 30min/incrementos de 15min continuam
+// só em arredondar15min (cicloMetaSegundos) e em distribuirComPiso (Calendário da Semana).
 function pesoSugerido(si){
   const restanteSeg = tempoRestanteMateria(si);
   if(restanteSeg!=null && restanteSeg>0) return Math.round((restanteSeg/3600)*10)/10;
   const restantePaginas = totalTheoryForSubject(si) - pagesReadForSubject(si);
   return restantePaginas<=0 ? 0.1 : Math.round((restantePaginas/20)*10)/10; // sem ritmo registrado ainda: heuristica generica
 }
+// Peso EFETIVO usado pra calcular a meta do Ciclo (cicloMetaSegundos/cicloPesoTotal) - "congela"
+// o peso sugerido na primeira vez que ele é preciso dentro da rodada atual, e reaproveita esse
+// mesmo valor daqui pra frente, até: (a) a rodada fechar e uma nova começar (criarCiclo/
+// recomecarCiclo/fechamento automático em checkCicloCompletion), (b) "Atualizar ciclo pra esta
+// semana" rodar (recalcularPesosCiclo), ou (c) o usuário sobrescrever esse peso manualmente em
+// Replanejar (override em c.pesos sempre vale na hora).
+//
+// ago/2026 (bug reportado pelo Bruno, "por que o que falta não bate com a semana"): antes,
+// getCicloPeso chamava pesoSugerido() direto, ao vivo, toda vez - como ele reflete o que está
+// pendente AGORA, a meta de uma matéria quase pronta podia encolher sozinha no meio da rodada
+// (por ex. depois de marcar mais páginas como lidas fora de uma sessão de cronômetro). Como
+// checkCicloCompletion() roda em todo render da aba Planejamento, isso podia fechar e reabrir
+// a rodada sozinho - sem nenhum clique do usuário - zerando a Sequência de Estudos (cicloPct
+// volta a 0% pra todo mundo) no meio da semana, enquanto o Calendário da Semana (que olha pra
+// semana civil, não pra rodada - ver comentário de sincronizarBlocosSemana) continuava com
+// blocos já marcados concluídos de sessões anteriores àquele fechamento. Congelar o peso assim
+// que ele é usado pela primeira vez na rodada resolve a causa raiz: a meta de cada matéria só
+// muda nos pontos deliberados acima, nunca sozinha a cada render.
+function pesoEfetivoCiclo(si){
+  const c = ensureCicloDefaults();
+  if(!c) return 0;
+  if(c.pesos[si]!=null) return c.pesos[si]; // override manual sempre vale na hora
+  if(c.pesoSnapshot[si]==null) c.pesoSnapshot[si] = pesoSugerido(si); // congela na 1a vez que precisa nesta rodada
+  return c.pesoSnapshot[si];
+}
 // Recalcula os pesos de TODAS as matérias ativas a partir do zero (limpa qualquer override
-// manual feito em "Replanejar") - chamado toda vez que a semana vira (atualizarCicloSemanaManual),
-// pra garantir que o peso sempre reflita o que está pendente AGORA, nunca um valor manual
-// congelado de semanas atrás. Devolve quantas matérias tinham peso manual (pra mensagem ao
-// usuário) - o valor em si não precisa ser escrito de volta em c.pesos: apagar o override é
-// suficiente pra getCicloPeso voltar a usar pesoSugerido(si) (sempre recalculado, dinâmico).
+// manual feito em "Replanejar" E qualquer valor já congelado pela rodada em curso) - chamado
+// toda vez que a semana vira (atualizarCicloSemanaManual), pra garantir que o peso sempre
+// reflita o que está pendente AGORA, nunca um valor manual ou congelado de semanas atrás.
+// Devolve quantas matérias tinham peso manual (pra mensagem ao usuário) - o valor em si não
+// precisa ser escrito de volta em c.pesos: apagar o override é suficiente pra
+// pesoEfetivoCiclo/getCicloPeso voltarem a congelar pesoSugerido(si) de novo, fresco, na
+// próxima vez que alguém precisar dele.
 function recalcularPesosCiclo(){
   const c = ensureCicloDefaults();
   if(!c) return 0;
   const tinhamOverride = Object.keys(c.pesos).filter(siStr=> isSubjectActive(Number(siStr))).length;
   c.pesos = {};
+  c.pesoSnapshot = {};
   save();
   return tinhamOverride;
 }
@@ -4084,7 +4117,7 @@ function getCicloPeso(si){
   const c = ensureCicloDefaults();
   if(!c) return 1;
   if(!isSubjectActive(si)) return 0; // excluida: peso efetivo zero (o valor editado fica guardado)
-  return c.pesos[si]!=null ? c.pesos[si] : pesoSugerido(si);
+  return pesoEfetivoCiclo(si);
 }
 function setCicloPeso(si, peso){
   const c = ensureCicloDefaults();
@@ -4096,6 +4129,7 @@ function resetCicloPeso(si){
   const c = ensureCicloDefaults();
   if(!c) return;
   delete c.pesos[si];
+  delete c.pesoSnapshot[si]; // "usar sugestão" = travar de novo com o valor pendente de AGORA
   save();
 }
 function cicloPesoTotal(){
@@ -4190,6 +4224,7 @@ function criarCiclo(horasPorSemana){
   state.ciclo = {
     horasPorSemana: Math.max(1, Number(horasPorSemana)||20),
     pesos: {},
+    pesoSnapshot: {},
     ordem: SUBJECTS.map((s,si)=>si),
     ciclosCompletos: 0,
     cicloStartedAt: Date.now(),
@@ -4215,6 +4250,7 @@ function recomecarCiclo(){
   // verdade (o fechamento automático só acontece quando todas já bateram a meta).
   registrarHistoricoCiclo(maxFim, false);
   c.cicloStartedAt = maxFim+1;
+  c.pesoSnapshot = {}; // rodada nova: congela pesos de novo a partir do pendente atual
   save();
 }
 function excluirCiclo(){
@@ -4248,6 +4284,7 @@ function checkCicloCompletion(){
     const maxFim = state.sessions.reduce((m,s)=> Math.max(m, s.timestampFim), c.cicloStartedAt);
     registrarHistoricoCiclo(maxFim, true);
     c.cicloStartedAt = maxFim+1;
+    c.pesoSnapshot = {}; // rodada nova: congela pesos de novo a partir do pendente atual
     save();
     toast(' Ciclo completo! Um novo ciclo foi iniciado.');
   }
@@ -4765,7 +4802,7 @@ function nivelLabel(n){ return NIVEL_LABELS[n] || n; }
 const EXTRA_TIPS = {
   peso_ciclo_sugerido: {
     titulo: 'Como o peso sugerido é calculado',
-    tooltip: 'O peso sugerido de cada matéria é proporcional ao tempo que falta pra terminar de ler a teoria dela (páginas restantes ÷ seu ritmo de leitura naquela matéria). Assim, uma matéria com o dobro do tempo restante de outra recebe o dobro do peso — e, dentro do ciclo, o dobro das horas semanais. O efeito matemático: seguindo o ciclo à risca, todas as matérias ativas tendem a terminar a teoria perto da mesma data, em vez de uma ficar pra trás — veja "Ritmo até a data alvo", no card do Ciclo, pra comparar com a data que você escolheu em Metas. Sem sessões suficientes ainda para calcular um ritmo, o app usa uma estimativa genérica baseada só nas páginas restantes. Você pode sobrescrever o valor sugerido a qualquer momento digitando o seu próprio peso — nesse caso ele fica fixo até a PRÓXIMA vez que você apertar "Atualizar ciclo pra esta semana": a virada de semana sempre recalcula os pesos do zero a partir do que está pendente naquele momento, mesmo os que foram ajustados manualmente. O tempo semanal que esse peso vira dentro do ciclo tem piso de 30min por matéria e sempre fecha em múltiplos de 15min (30min, 45min, 1h, 1h15…) — nunca uma fração como "37min".'
+    tooltip: 'O peso sugerido de cada matéria é proporcional ao tempo que falta pra terminar de ler a teoria dela (páginas restantes ÷ seu ritmo de leitura naquela matéria). Assim, uma matéria com o dobro do tempo restante de outra recebe o dobro do peso — e, dentro do ciclo, o dobro das horas semanais. O efeito matemático: seguindo o ciclo à risca, todas as matérias ativas tendem a terminar a teoria perto da mesma data, em vez de uma ficar pra trás — veja "Ritmo até a data alvo", no card do Ciclo, pra comparar com a data que você escolheu em Metas. Sem sessões suficientes ainda para calcular um ritmo, o app usa uma estimativa genérica baseada só nas páginas restantes. Esse peso sugerido é recalculado e travado uma vez no início de cada rodada do ciclo (e não muda sozinho enquanto ela estiver em andamento, mesmo que o tempo restante mude) — assim a meta de cada matéria fica estável até a rodada fechar. Você pode sobrescrever o valor sugerido a qualquer momento digitando o seu próprio peso — nesse caso ele fica fixo até a PRÓXIMA vez que você apertar "Atualizar ciclo pra esta semana" ou clicar em "usar sugestão" pra essa matéria: aí ele é recalculado do zero a partir do que está pendente naquele momento. O tempo semanal que esse peso vira dentro do ciclo tem piso de 30min por matéria e sempre fecha em múltiplos de 15min (30min, 45min, 1h, 1h15…) — nunca uma fração como "37min".'
   },
   meta_data_alvo: {
     titulo: 'Meta por data alvo',
