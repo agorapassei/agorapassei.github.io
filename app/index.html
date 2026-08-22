@@ -4962,7 +4962,7 @@ function renderFavoritosCard(){
   if(favStatus){
     const n = favoriteCount();
     favStatus.innerHTML = n>0
-      ? `${n} questão${n===1?'':'ões'} favoritada${n===1?'':'s'}.`
+      ? `${n} quest${n===1?'ão':'ões'} favoritada${n===1?'':'s'}.`
       : 'Toque na <svg class=ic-svg aria-hidden=true><use href=#ic-star></use></svg> durante uma questão pra favoritá-la e revisar depois, independente de ter acertado ou errado.';
   }
   const btnRefazerFav = document.getElementById('btnRefazerFavoritas');
@@ -6165,7 +6165,7 @@ function renderHibrido(){
      edital" nenhum). */
   const apoio = semNada
     ? 'Nenhuma questão respondida ainda.'
-    : `<b>${pend}</b> questão${pend===1?'':'ões'} pendente${pend===1?'':'s'} de domínio (já tentada${pend===1?'':'s'}, ainda não dominada${pend===1?'':'s'}) · <b>${banco.toLocaleString('pt-BR')}</b> questões no banco (matérias ativas)`
+    : `<b>${pend}</b> quest${pend===1?'ão':'ões'} pendente${pend===1?'':'s'} de domínio (já tentada${pend===1?'':'s'}, ainda não dominada${pend===1?'':'s'}) · <b>${banco.toLocaleString('pt-BR')}</b> questões no banco (matérias ativas)`
       + (m.pct!=null ? ` · <b>${m.pct}%</b> de acerto entre as tentadas` : '')
       + (ft.pct!=null ? ` · <b>${ft.pct}%</b> de acerto na 1ª tentativa` : '');
 
